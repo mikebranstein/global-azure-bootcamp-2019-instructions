@@ -39,7 +39,22 @@ We've assembled an exciting workshop to introduce you to several Azure services 
 * [Cosmos DB](https://azure.microsoft.com/en-us/services/cosmos-db/)
 * [Virtual Machines](https://azure.microsoft.com/en-us/services/virtual-machines/)
 
-#### Key concepts and takeaways
+In today's workshop, you'll get started with Azure and learn how to navigate through the Azure portal! You'll activate a free Azure subscription, learn about Resource Groups, and navigate through the Azure portal. You'll also create your development environment virtual machine running Visual Studio Community Edition.
+
+Next, you'll learn about Platform as a Service (PaaS) offerings while creating a simple web app to manage data stored in an Azure SQL database. You'll finish by securing the data connection between your application and the database using an MSI (Managed Service Identity), then deploying to Azure services that host your web app.
+
+Once your app is up and running, we'll teach you how your app can be restructured for scalability by separating the backend data access later into a separately-hosted ASP.NET Web API app. You'll also learn how to secure your service.
+
+After you've built and deployed a REST API, you'll learn how you can use Azure Functions and Cosmos DB to aggregate your data and ready it for consumption by the public.
+
+Finally, after developing a database of publicly-consumable data, we'll explore how to advertise the data publicly as an API using App Services, Web API, and API Management. See how it's easy to have customers request access to the data, subscribe to your service, and generate additional revenue.
+
+Essentially...
+
+<img src="images/chapter0/profit.jpeg"  />
+
+
+### Key concepts and takeaways
 
 * Navigating the Azure portal
 * Using Azure Resource Groups to manage multiple Azure services
@@ -58,7 +73,6 @@ We've assembled an exciting workshop to introduce you to several Azure services 
 * Chapter 4: Decoupling Web Apps with a REST API Service Layer
 * Chapter 5: Comsuming a REST API
 * Chapter 6: Securing REST API Services with API Management
-https://docs.microsoft.com/en-us/azure/architecture/example-scenario/apps/apim-api-scenario#architecture
 * Chapter 7: Consuming a Secure REST API
 * Chapter 8: Introduction to the API Economy
 * Chapter 9: Using Cosmos DB to store Aggregated Data
@@ -192,7 +206,7 @@ When the page loads, you'll see this custom deployment page:
 #### Under *Basics*, select/enter the following
 - Subscription: *your Azure subscription*
 - Resource group: *Create new*
-- Resource group name: *workshop-vm*, or some other name that's easy to remember
+- Resource group name: *workshop*, or some other name that's easy to remember
 - Location: *East US*
 
 > **Resource Groups** 
