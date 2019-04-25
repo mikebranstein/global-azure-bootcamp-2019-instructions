@@ -31,23 +31,38 @@ Azure is big. Really big. Too big to talk about all things Azure in a single day
 
 We've assembled an exciting workshop to introduce you to several Azure services that cloud developers should know about:
 * [Web app](https://azure.microsoft.com/en-us/services/app-service/web/)
-
-TODO: Add more.
+* [Key Vault](https://azure.microsoft.com/en-us/services/key-vault/)
+* [Azure SQL Database](https://azure.microsoft.com/en-us/services/sql-database/)
+* [Event Hub](https://azure.microsoft.com/en-us/services/event-hubs/)
+* [Azure Functions](https://azure.microsoft.com/en-us/services/functions/)
+* [API Management](https://azure.microsoft.com/en-us/services/api-management/)
+* [Cosmos DB](https://azure.microsoft.com/en-us/services/cosmos-db/)
+* [Virtual Machines](https://azure.microsoft.com/en-us/services/virtual-machines/)
 
 #### Key concepts and takeaways
 
 * Navigating the Azure portal
 * Using Azure Resource Groups to manage multiple Azure services
 * Deploying a web app to Azure web app service
-
-TODO: Add more.
+* Decomposing an ASP.NET Core 2.2 MVC app into decoupled Web API services
+* Deploying an Azure SQL database
+* Using Events Hubs, Azure Functions, and Cosmos DB to develop an aggregated datastore
+* Using the Azure API Management service to create a subscription-based API offering  
 
 ### Agenda
 
 * Chapter 0: Introduction
 * Chapter 1: Getting Started in Azure
-
-TODO: Update
+* Chapter 2: Deploying a 2-tier Web App
+* Chapter 3: Increasing the Security of Deployed Apps
+* Chapter 4: Decoupling Web Apps with a REST API Service Layer
+* Chapter 5: Comsuming a REST API
+* Chapter 6: Securing REST API Services with API Management
+https://docs.microsoft.com/en-us/azure/architecture/example-scenario/apps/apim-api-scenario#architecture
+* Chapter 7: Consuming a Secure REST API
+* Chapter 8: Introduction to the API Economy
+* Chapter 9: Using Cosmos DB to store Aggregated Data
+* Chapter 10: Exposing Aggregated Data for Profit
 
 ### Materials
 
