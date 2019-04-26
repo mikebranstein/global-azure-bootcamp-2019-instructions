@@ -143,6 +143,10 @@ Now it's safe to unzip the file.
 
 <div class="exercise-end"></div>
 
+### About Contoso University
+
+The Contoso University web app is a small app that is used to manage the faculty, students, courses, and grades of Contoso University. It's not very advanced, but comes with pre-seeded data, and is ideal to demonstrate the concepts of this workshop.  
+
 ### Verify the site works
 
 <h4 class="exercise-start">

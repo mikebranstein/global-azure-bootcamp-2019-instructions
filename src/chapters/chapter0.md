@@ -68,7 +68,7 @@ Essentially...
 
 * Chapter 0: Introduction
 * Chapter 1: Getting Started in Azure
-* Chapter 2: Deploying a 2-tier Web App
+* Chapter 2: Connecting an Azure SQL Database
 * Chapter 3: Increasing the Security of Deployed Apps
 * Chapter 4: Decoupling Web Apps with a REST API Service Layer
 * Chapter 5: Comsuming a REST API

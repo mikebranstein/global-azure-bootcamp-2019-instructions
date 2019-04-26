@@ -89,7 +89,7 @@
 <ul>
 <li>Chapter 0: Introduction</li>
 <li>Chapter 1: Getting Started in Azure</li>
-<li>Chapter 2: Deploying a 2-tier Web App</li>
+<li>Chapter 2: Connecting an Azure SQL Database</li>
 <li>Chapter 3: Increasing the Security of Deployed Apps</li>
 <li>Chapter 4: Decoupling Web Apps with a REST API Service Layer</li>
 <li>Chapter 5: Comsuming a REST API</li>
@@ -320,6 +320,8 @@
 <p>Now it&#39;s safe to unzip the file. </p>
 <div class="exercise-end"></div>
 
+<h3 id="about-contoso-university">About Contoso University</h3>
+<p>The Contoso University web app is a small app that is used to manage the faculty, students, courses, and grades of Contoso University. It&#39;s not very advanced, but comes with pre-seeded data, and is ideal to demonstrate the concepts of this workshop.  </p>
 <h3 id="verify-the-site-works">Verify the site works</h3>
 <h4 class="exercise-start">
     <b>Exercise</b>: Compiling the solution
@@ -404,6 +406,116 @@
 <p><img src="images/chapter1/deployed-webapp.png" class="img-override" /></p>
 <p>This concludes the exercise. </p>
 <div class="exercise-end"></div>
+			</div>
+			<hr>
+			<div class="chapter">
+				<h2 id="connecting-an-azure-sql-database">Connecting an Azure SQL Database</h2>
+<p>In this chapter you&#39;ll learn about Azure SQL Database, how to provision one in the Azure Portal, and how to use Entity Framework Core (EF Core) to seed a local (development database) and an Azure SQL Database.</p>
+<h3 id="overview">Overview</h3>
+<p>Azure SQL Database is a general-purpose relational database-as-a-service (DBaaS) based on the latest stable version of Microsoft SQL Server Database Engine. SQL Database is a high-performance, reliable, and secure cloud database that you can use to build data-driven applications and websites in the programming language of your choice, without needing to manage infrastructure.</p>
+<h3 id="provisioning-in-azure">Provisioning in Azure</h3>
+<p>Now that you know what Azure SQL Database can do, let&#39;s start using it! You&#39;ll start by creating a SQL Database instance in the Azure portal. </p>
+<blockquote>
+<p><strong>SQL Servers and Databases</strong></p>
+<p>When creating a SQL Database, you also need to create a SQL Server. The steps below walk you through this process.</p>
+</blockquote>
+<h4 class="exercise-start">
+    <b>Exercise</b>: Creating a SQL Server and Database instance
+</h4>
+
+<p>Start by jumping back to the Azure portal, and create a new resource by clicking the <em>Create a resource</em> button.</p>
+<p>Search for <em>SQL Database</em>:</p>
+<p><img src="images/chapter2/sql-search.png" class="img-medium" /></p>
+<p>Fill out the required parameters as you create an instance:</p>
+<ul>
+<li>Resource group: the resource group you created earlier</li>
+<li>Database name: ContosoUniversity3</li>
+<li>Server: <em>Press Create new button</em>, complete right side panel</li>
+<li>Server name: unique SQL server name to create</li>
+<li>Server admin login: workshopAdmin</li>
+<li>Password: <em>Enter complex password</em>, write it down</li>
+<li>Location: East US</li>
+</ul>
+<p><img src="images/chapter2/create-sql.png" class="img-override" /></p>
+<p>Press the <em>Select</em> button after completing the server information in the right panel, then press <em>Review and create</em>.</p>
+<p><img src="images/chapter2/sql-review-create.png" /></p>
+<p>When the SQL Server and database instances are provisioned, they appear in your resource group:</p>
+<p><img src="images/chapter2/sql-deployed.png" class="img-override" /></p>
+<p>The final step is to navigate to the SQL Server instance by clicking on it. </p>
+<blockquote>
+<p><strong>Secured by default</strong></p>
+<p>As with most Azure resources, SQL Server is secured by default, meaning that you cannot access the SQL Server or databases without opening up the attached firewall. In this next step, we&#39;ll do just that.</p>
+</blockquote>
+<p>Locate the <em>Firewalls and virtual networks</em> area, click <em>Show firewall settings</em>.</p>
+<p><img src="images/chapter2/sql-firewall.png" class="img-override" /></p>
+<p>Click the <em>Add client IP</em> button and notice an entry being made in the table below. Then, click <em>Save</em>. This opens the SQL Server firewall to allow you to communicate with it directly for the duration of the workshop.</p>
+<p><img src="images/chapter2/add-client-ip.png" class="img-override" /></p>
+<p>Next, navigate to the <em>SQL Databases</em> link on the left, and select the ContosoUniversity3 database.</p>
+<p><img src="images/chapter2/nav-sql.png" class="img-medium" /></p>
+<p>Click the <em>Show database connection strings</em> link:</p>
+<p><img src="images/chapter2/conn-strings.png" class="img-override" /></p>
+<p>Copy the connection string and paste it into Notepad, or another text editor:</p>
+<p><img src="images/chapter2/copy-conn-string.png" class="img-override" /></p>
+<p>After pasting the connections tring into a text editor, locate the <code>{your_username}</code> and <code>{your_password}</code> sections and update them with the SQL Server username and password you created previously.</p>
+<p><img src="images/chapter2/update-conn-string.png" class="img-medium" /></p>
+<p>Save this connection string -- you&#39;ll need it later!</p>
+<p>This concludes the exercise. </p>
+<div class="exercise-end"></div>
+
+<h3 id="seeding-your-databases">Seeding your databases</h3>
+<p>You may have noticed that the Contoso University app crashes when you navigate to various pages. That&#39;s because it&#39;s expecting a database exists, but we haven&#39;t created it.</p>
+<p>In this next step, we&#39;ll use Entity Framework&#39;s Migrations to create and seed a local SQL database, then do the same for the Azure SQL Database we just created.</p>
+<h4 class="exercise-start">
+    <b>Exercise</b>: Seeding the local SQL Database
+</h4>
+
+<p>Every installation of Visual Studio 2019 comes with a development version of SQL Server called MS SQL Local DB. In fact, the Contoso University app is pre-configured to use this SQL Server instance already.</p>
+<p>Open the <code>appsettings.json</code> file to see the connection string:</p>
+<pre><code class="lang-json">&quot;ConnectionStrings&quot;: {
+    &quot;DefaultConnection&quot;: &quot;Server=(localdb)\\mssqllocaldb;Database=ContosoUniversity3;Trusted_Connection=True;MultipleActiveResultSets=true&quot;
+  }
+</code></pre>
+<p>Notice the server name of <strong>(localdb)\mssqllocaldb</strong>. This is the local development version of SQL I mentioned above. We&#39;ll use this in the next section to &quot;seed&quot; the database with Entity Framework Migrations.</p>
+<blockquote>
+<p><strong>Entity Framework and Migrations</strong></p>
+<p>If you&#39;re not familiar with Entity Framework and Migrations, don&#39;t worry. Entity Framework (EF) is a technology called an object-relational mapper (O/RM). O/RMs (like EF) enable .NET developers to work with a database using .NET objects, and eliminating the need for most of the data-access code they usually need to write (like stored procedures, views, and queries). </p>
+<p>EF Migrations are a way to use .NET objects and code to create a SQL database and tables, then seed the database with preliminary data.</p>
+</blockquote>
+<p>The Contoso University app already has Entity Framework installed and configured. Let&#39;s use it to create the ContosoUniversity3 database locally by running the migrations.</p>
+<h4 id="using-ef-migrations">Using EF Migrations</h4>
+<p>In Visual Studio, go to the <em>Tools</em> menu, select <em>NuGet Package Manager</em>, then <em>Package Manager Console</em>.</p>
+<p><img src="images/chapter2/open-pm.png" class="img-medium" /></p>
+<p>This opens a new area at the bottom of Visual Studio:</p>
+<p><img src="images/chapter2/pm-console.png" class="img-medium" /></p>
+<p>In the Package Manager Console, change the Default project to <em>ContosoUniversityData</em>, the type <em>Update-Database</em> and press <em>Enter</em>. The EF Migrations will read the connection string from your configuration file, create the ContosoUniversity3 database, create the tables, and load seed data into the tables. You can see the process happening below:</p>
+<p><img src="images/chapter2/ef-migrations.gif" class="img-medium" /></p>
+<p>When the EF Migrations have finished, run the web site, and navigate to the <em>Courses</em> page. You will see the page displays a variety of course data:</p>
+<p><img src="images/chapter2/courses.png" class="img-medium" /></p>
+<p>This concludes the exercise. </p>
+<div class="exercise-end"></div>
+
+<p>Now that you&#39;ve used EF Migrations, let&#39;s seed the ContosoUniversity3 database in Azure. </p>
+<h4 class="exercise-start">
+    <b>Exercise</b>: Seeding the Azure SQL Database
+</h4>
+
+<p>Open the <code>appsettings.json</code> file to adjust the connection string. You&#39;llrecall that we saved the Azure SQL Database connection string in our text editor earlier. Copy the value and paste it into the configuration file.</p>
+<p>Mine looks like:</p>
+<p><img src="images/chapter2/appsettings.png" class="img-medium" /></p>
+<p>Now that the connection string has been updated, return to the Package Manager Console and run the EF Migrations again.</p>
+<blockquote>
+<p><strong>ContosoUniversityData project</strong></p>
+<p>Don&#39;t forget to change the default project to ContosoUniversityData before running the migrations.</p>
+</blockquote>
+<pre><code>&gt; Update-Database
+</code></pre><p>This will use the updated connection string to provision and seed the ContosoUniversity3 database in Azure.</p>
+<p>When the migrations have finished, run the website to verify it still works. </p>
+<p>Now, as a final step, re-deploy your web app to Azure, so it has the updated connection string (pointing to your Azure SQL Database).</p>
+<p>This concludes the exercise. </p>
+<div class="exercise-end"></div>
+
+<p>That&#39;s it. In the next chapter, you&#39;ll learn how to secure your connection string so it isn&#39;t visible int he configuration file.</p>
+
 			</div>
 			<hr>
 			<br />

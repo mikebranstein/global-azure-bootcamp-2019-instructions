@@ -1,122 +1,168 @@
-## Introduction to the Custom Speech Service
+## Connecting an Azure SQL Database
 
-In this chapter you'll learn about the Custom Speech Service, how to provision one in the Azure Portal, and how to link your subscription to the Custom Speech Service portal.
+In this chapter you'll learn about Azure SQL Database, how to provision one in the Azure Portal, and how to use Entity Framework Core (EF Core) to seed a local (development database) and an Azure SQL Database.
 
-> **Abbreviation** 
->
-> To save some time, you may see me refer to the Custom Speech Service as CSS. I know it can be confusing, especially if you're a web developer. But, let's pretend for a day that you're not, and use CSS in a different way. Thanks!
 
 ### Overview
 
-The Custom Speech Service enables you to create a customized speech-to-text platform that meets the needs of your business. With the service, you create customized language models and acoustic models tailored to your application and your users. By uploading your specific speech and/or text data to the Custom Speech Service, you can create custom models that can be used in conjunction with Microsoft’s existing state-of-the-art speech models. With these capabilities, you're able to filter out common background noise, adjust for localized dialects, and train the speech service to recognize non-standard/obscure words and phrases (like "Pokemon", scientific terms, and technical jargon).
+Azure SQL Database is a general-purpose relational database-as-a-service (DBaaS) based on the latest stable version of Microsoft SQL Server Database Engine. SQL Database is a high-performance, reliable, and secure cloud database that you can use to build data-driven applications and websites in the programming language of your choice, without needing to manage infrastructure.
 
-For example, if you’re adding voice interaction to a mobile phone, tablet or PC app, you can create a custom language model that can be combined with Microsoft’s acoustic model to create a speech-to-text endpoint designed especially for your app. If your application is designed for use in a particular environment or by a particular user population, you can also create and deploy a custom acoustic model with this service.
-
-#### How do speech recognition systems work?
-
-Before you get started, it's important to understand how speech recognition systems work.
-
-Speech recognition systems are composed of several components that work together. Two of the most important components are the acoustic model and the language model.
-
-> **Acoustic Model**
->
-> The acoustic model is a classifier that labels short fragments of audio into one of a number of phonemes, or sound units, in a given language. For example, the word “speech” is comprised of four phonemes “s p iy ch”. These classifications are made on the order of 100 times per second.
-
-> **Phoneme**
->
-> In short, a sound unit. Any of the perceptually distinct units of sound in a specified language that distinguish one word from another, for example p, b, d, and t in the English words pad, pat, bad, and bat.
-
-> **Language Model**
->
-> The language model is a probability distribution over sequences of words. The language model helps the system decide among sequences of words that sound similar, based on the likelihood of the word sequences themselves. For example, “recognize speech” and “wreck a nice beach” sound alike but the first hypothesis is far more likely to occur, and therefore will be assigned a higher score by the language model.
-
-Both the acoustic and language models are statistical models learned from training data. As a result, they perform best when the speech they encounter when used in applications is similar to the data observed during training. The acoustic and language models in the Microsoft Speech-To-Text engine have been trained on an enormous collection of speech and text and provide state-of-the-art performance for the most common usage scenarios, such as interacting with Cortana on your smart phone, tablet or PC, searching the web by voice or dictating text messages to a friend.
-
-> **Credits**
->
-> This section was borrowed from Microsoft's [official documentation](https://docs.microsoft.com/en-us/azure/cognitive-services/Custom-Speech-Service/cognitive-services-custom-speech-home#what-is-the-custom-speech-service). Thank you!
-
-#### Using the Custom Speech Service, Acoustic Models, and Language Models
-
-Throughout the next several chapters, you'll be building acoustic and language models. Don't worry if you don't understand everything right now, because you'll be learning as you go.
-
-> **Bing Speech API**
->
-> Microsoft has another speech-to-text service in Azure called the Bing Speech API. This API is like the Custom Speech Service, but it cannot be customized. I like to think of the Bing Speech API as a v1 product, and the Custom Speech Service as a v2 product. Both are highly capable, but when I need to account for background noise, custom words, etc. I choose the Custom Speech Service.
 
 ### Provisioning in Azure
 
-Now that you know what the Custom Speech Service can do, let's start using it! You'll start by creating a Custom Speech Service instance in the Azure portal. 
+Now that you know what Azure SQL Database can do, let's start using it! You'll start by creating a SQL Database instance in the Azure portal. 
+
+> **SQL Servers and Databases**
+>
+> When creating a SQL Database, you also need to create a SQL Server. The steps below walk you through this process.
 
 <h4 class="exercise-start">
-    <b>Exercise</b>: Creating a Custom Speech Service Instance
+    <b>Exercise</b>: Creating a SQL Server and Database instance
 </h4>
 
 Start by jumping back to the Azure portal, and create a new resource by clicking the *Create a resource* button.
 
-Search for *Custom Speech Service*:
+Search for *SQL Database*:
 
-<img src="images/chapter2/css-search.png" class="img-override" />
+<img src="images/chapter2/sql-search.png" class="img-medium" />
 
 Fill out the required parameters as you create an instance:
-- Name: *workshop-css*, or something similar
-- Subscription
-- Location: *West US*
-- Pricing tier: *F0*
 - Resource group: the resource group you created earlier
+- Database name: ContosoUniversity3
+- Server: *Press Create new button*, complete right side panel
+- Server name: unique SQL server name to create
+- Server admin login: workshopAdmin
+- Password: *Enter complex password*, write it down
+- Location: East US
 
-<img src="images/chapter2/css-create.png" class="img-override" />
+<img src="images/chapter2/create-sql.png" class="img-override" />
 
-> **West US Location**
+Press the *Select* button after completing the server information in the right panel, then press *Review and create*.
+
+<img src="images/chapter2/sql-review-create.png" />
+
+When the SQL Server and database instances are provisioned, they appear in your resource group:
+
+<img src="images/chapter2/sql-deployed.png" class="img-override" />
+
+The final step is to navigate to the SQL Server instance by clicking on it. 
+
+> **Secured by default**
 >
-> Normally, I recommend you keep resources in the same region, but the Custom Speech Service is in preview right now, so it's only available in West US.
+> As with most Azure resources, SQL Server is secured by default, meaning that you cannot access the SQL Server or databases without opening up the attached firewall. In this next step, we'll do just that.
 
-When the Custom Speech Service instance is provisioned, it will appear in your resource group:
+Locate the *Firewalls and virtual networks* area, click *Show firewall settings*.
 
-<img src="images/chapter2/css-resource-group.png" class="img-override" />
+<img src="images/chapter2/sql-firewall.png" class="img-override" />
 
-The final step is to navigate to the Custom Speech Service instance by clicking on it. 
+Click the *Add client IP* button and notice an entry being made in the table below. Then, click *Save*. This opens the SQL Server firewall to allow you to communicate with it directly for the duration of the workshop.
 
-Locate the *Keys* area and take note of *KEY 1*:
+<img src="images/chapter2/add-client-ip.png" class="img-override" />
 
-<img src="images/chapter2/css-keys.png" class="img-override" />
+Next, navigate to the *SQL Databases* link on the left, and select the ContosoUniversity3 database.
 
-You'll need this key in the next step, so don't forget it.
+<img src="images/chapter2/nav-sql.png" class="img-medium" />
+
+Click the *Show database connection strings* link:
+
+<img src="images/chapter2/conn-strings.png" class="img-override" />
+
+Copy the connection string and paste it into Notepad, or another text editor:
+
+<img src="images/chapter2/copy-conn-string.png" class="img-override" />
+
+After pasting the connections tring into a text editor, locate the `{your_username}` and `{your_password}` sections and update them with the SQL Server username and password you created previously.
+
+<img src="images/chapter2/update-conn-string.png" class="img-medium" />
+
+Save this connection string -- you'll need it later!
 
 This concludes the exercise. 
 
 <div class="exercise-end"></div>
 
-### Linking your Subscription on the CSS Web Portal
+### Seeding your databases
 
-There's not much you can do with the Custom Speech Service in the Azure portal because the service is still in preview. Instead, a separate portal exists to perform customizations and work with the service. In the next section, you'll be introduced to the Custom Speech Service portal.
+You may have noticed that the Contoso University app crashes when you navigate to various pages. That's because it's expecting a database exists, but we haven't created it.
+
+In this next step, we'll use Entity Framework's Migrations to create and seed a local SQL database, then do the same for the Azure SQL Database we just created.
 
 <h4 class="exercise-start">
-    <b>Exercise</b>: Linking your CSS subscription to the CSS portal
+    <b>Exercise</b>: Seeding the local SQL Database
 </h4>
 
-Start by navigating to the CSS web portal at <a href="https://cris.ai" target="_blank">https://cris.ai</a>.
+Every installation of Visual Studio 2019 comes with a development version of SQL Server called MS SQL Local DB. In fact, the Contoso University app is pre-configured to use this SQL Server instance already.
 
-Click the *Sign In* link in the upper right and sign in with your Azure portal subscription login.
+Open the `appsettings.json` file to see the connection string:
 
-After logging in, click on your name the upper right, and select the *Subscriptions* option below it:
+```json
+"ConnectionStrings": {
+    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=ContosoUniversity3;Trusted_Connection=True;MultipleActiveResultSets=true"
+  }
+```
 
-<img src="images/chapter2/portal-sub.png" class="img-override" />
+Notice the server name of **(localdb)\\mssqllocaldb**. This is the local development version of SQL I mentioned above. We'll use this in the next section to "seed" the database with Entity Framework Migrations.
 
-#### Subscriptions
+> **Entity Framework and Migrations**
+>
+> If you're not familiar with Entity Framework and Migrations, don't worry. Entity Framework (EF) is a technology called an object-relational mapper (O/RM). O/RMs (like EF) enable .NET developers to work with a database using .NET objects, and eliminating the need for most of the data-access code they usually need to write (like stored procedures, views, and queries). 
+>
+> EF Migrations are a way to use .NET objects and code to create a SQL database and tables, then seed the database with preliminary data.
 
-The *Subscriptions* page shows all of your connected CSS subscriptions. 
+The Contoso University app already has Entity Framework installed and configured. Let's use it to create the ContosoUniversity3 database locally by running the migrations.
 
-<img src="images/chapter2/portal-sub-page.png" class="img-override" />
+#### Using EF Migrations
 
-Click the *Connect existing subscription* button. Add the CSS subscription you just created in the Azure portal. Give it a name and enter *KEY 1* from the Azure portal.
+In Visual Studio, go to the *Tools* menu, select *NuGet Package Manager*, then *Package Manager Console*.
 
-<img src="images/chapter2/sub-add.png" class="img-override" />
+<img src="images/chapter2/open-pm.png" class="img-medium" />
 
-You should see the subscription appear on the subscriptions page.
+This opens a new area at the bottom of Visual Studio:
+
+<img src="images/chapter2/pm-console.png" class="img-medium" />
+
+In the Package Manager Console, change the Default project to *ContosoUniversityData*, the type *Update-Database* and press *Enter*. The EF Migrations will read the connection string from your configuration file, create the ContosoUniversity3 database, create the tables, and load seed data into the tables. You can see the process happening below:
+
+<img src="images/chapter2/ef-migrations.gif" class="img-medium" />
+
+When the EF Migrations have finished, run the web site, and navigate to the *Courses* page. You will see the page displays a variety of course data:
+
+<img src="images/chapter2/courses.png" class="img-medium" />
 
 This concludes the exercise. 
 
 <div class="exercise-end"></div>
 
-That's it. In the next chapter, you'll start to use the CSS by creating various data sets for training and testing.
+Now that you've used EF Migrations, let's seed the ContosoUniversity3 database in Azure. 
+
+<h4 class="exercise-start">
+    <b>Exercise</b>: Seeding the Azure SQL Database
+</h4>
+
+Open the `appsettings.json` file to adjust the connection string. You'llrecall that we saved the Azure SQL Database connection string in our text editor earlier. Copy the value and paste it into the configuration file.
+
+Mine looks like:
+
+<img src="images/chapter2/appsettings.png" class="img-medium" />
+
+Now that the connection string has been updated, return to the Package Manager Console and run the EF Migrations again.
+
+> **ContosoUniversityData project**
+>
+> Don't forget to change the default project to ContosoUniversityData before running the migrations.
+
+```
+> Update-Database
+```
+
+This will use the updated connection string to provision and seed the ContosoUniversity3 database in Azure.
+
+When the migrations have finished, run the website to verify it still works. 
+
+Now, as a final step, re-deploy your web app to Azure, so it has the updated connection string (pointing to your Azure SQL Database).
+
+This concludes the exercise. 
+
+<div class="exercise-end"></div>
+
+That's it. In the next chapter, you'll learn how to secure your connection string so it isn't visible int he configuration file.
