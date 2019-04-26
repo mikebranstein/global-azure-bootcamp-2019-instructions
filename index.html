@@ -518,6 +518,224 @@
 
 			</div>
 			<hr>
+			<div class="chapter">
+				<h2 id="increasing-the-security-of-deployed-apps">Increasing the Security of Deployed Apps</h2>
+<p>In this chapter, you&#39;ll learn:</p>
+<ul>
+<li>How to secure secrets (like SQL databse connection strings) with Key Vaults</li>
+<li>How to add authentication to your web apps instantly</li>
+</ul>
+<h3 id="securing-secrets-in-web-apps">Securing Secrets in Web Apps</h3>
+<p>Since the early days of .NET, developers have been putting SQL database connection strings in configuration files. This is not only a bad practice, but a serious security risk for several reasons:</p>
+<ul>
+<li>login credentials are saved in plain-text </li>
+<li>it&#39;s easy to accidentally check in the credentials</li>
+</ul>
+<p>Because of the risks of plain-text credentials, developers started encrypting the vaules, but this brought challenges with how to encrypt and decrypt, and made a developer&#39;s job more difficult.</p>
+<p><img src="images/chapter3/better-way.gif" /></p>
+<p>There&#39;s got to be a better way!</p>
+<h4 id="key-vault-to-the-rescue-">Key Vault to the Rescue!</h4>
+<p>Introducing Key Vault! Azure Key Vault helps solve the following problems:</p>
+<ul>
+<li><strong>Secrets Management</strong>: Azure Key Vault can be used to Securely store and tightly control access to tokens, passwords, certificates, API keys, and other secrets</li>
+<li><strong>Key Management</strong>: Azure Key Vault can also be used as a Key Management solution. Azure Key Vault makes it easy to create and control the encryption keys used to encrypt your data.</li>
+<li><strong>Certificate Management</strong>: Azure Key Vault is also a service that lets you easily provision, manage, and deploy public and private Secure Sockets Layer/Transport Layer Security (SSL/TLS) certificates for use with Azure and your internal connected resources.</li>
+<li><strong>Store secrets backed by Hardware Security Modules</strong>: The secrets and keys can be protected either by software or FIPS 140-2 Level 2 validates HSMs</li>
+</ul>
+<p>So, with Key Vault, you store your connection strings inside of a secret store instead of in your app configuration file. Then, you simply store the location or URL of the Key Vault in your config file, so when your app starts up, you access the Key Vault, extract your secrets, then continue on as normal.</p>
+<blockquote>
+<p><strong>But wait...don&#39;t I need a secret/password to access a Key Vault</strong></p>
+<p>Yes you do, but it doesn&#39;t make much sense to store that secret inside of your app configuration file. Afterall, that&#39;s exactly what we&#39;re trying to avoid!</p>
+</blockquote>
+<h4 id="accessing-keyvault-without-a-password">Accessing KeyVault without a Password</h4>
+<p>That&#39;s right. You can actually access the Key Vault without a password - at least a password that you&#39;re aware of. </p>
+<p>The second critical component to securing your app secrets is something called a Managed Service Identity (or MSI for short). You can think of an MSI like a service account, but a service account that doesn&#39;t have a password. </p>
+<p>Within Azure, you can assign an MSI to a Web App, so when the app runs it &quot;acts&quot; or &quot;takes on&quot; the role of the MSI. So, once it&#39;s been assigned to a Web App, you can give the Web App MSI permissions to access your Key Vault. </p>
+<p>To the developer, this seems like magic - when you app runs, it becomes an MSI, then has permissions to access the Key Vault without a password. But behind the scenes Azure is managing the entire process, ensuring your Web App is the only resource using the assigned MSI.</p>
+<h3 id="assigning-an-msi-to-your-web-app">Assigning an MSI to your Web App</h3>
+<p>Let&#39;s get started by assigning an MSI to your web app!</p>
+<h4 class="exercise-start">
+    <b>Exercise</b>: Assigning an MSI through the Azure Portal
+</h4>
+
+<p>Navigate to the web app you deployed in an earlier chapter. Mine was called <em>contoso-web-meb</em>.</p>
+<p>Scroll down on the left to find a section named <em>Identity</em>. Click on <em>Identity</em>:</p>
+<p><img src="images/chapter3/identity.png" class="img-medium" /></p>
+<p>On the <em>System assigned</em> tab, change the status to <em>On</em> and press <em>Save</em>.</p>
+<p><img src="images/chapter3/system-assigned.png" class="img-medium" /></p>
+<p>Click <em>Yes</em> when prompted.</p>
+<p><img src="images/chapter3/accept.png" class="img-override" /></p>
+<p>...and that&#39;s it! Your MSI (Managed Service Identity) is assigned. </p>
+<p><img src="images/chapter3/assigned.png" class="img-override" /></p>
+<p>This concludes the exercise. </p>
+<div class="exercise-end"></div> 
+
+<h3 id="creating-a-key-vault">Creating a Key Vault</h3>
+<p>Now that you have an MSI assigned to your web app, it&#39;s time to create a Key Vault and give the MSI access to read secrets.</p>
+<h4 class="exercise-start">
+    <b>Exercise</b>: Creating a Key Vault and Assigning Access
+</h4>
+
+<p>In the Azure portal, search for the Key Vault by searching for it, like you did the SQL Database in an earlier chapter.</p>
+<p><img src="images/chapter3/search-kv.png" class="img-medium" /></p>
+<p>Place the Key Vault in the resource group you created for the workshop:</p>
+<p><img src="images/chapter3/create-kv.png" /></p>
+<p>Click the <em>Access policies</em> section, then the <em>+ Add new</em> link to add the web app MSI to the Key Vault&#39;s authorized users:</p>
+<p><img src="images/chapter3/access-policies-kv.png" class="img-medium" /></p>
+<p>Do the following:</p>
+<ol>
+<li>Select <em>Secret management</em> from the <em>Configure from template</em> option</li>
+<li>Click <em>Select principal</em></li>
+<li>In the box to the right, type the name of your web app (mine was contoso-web-meb)</li>
+<li>Click your web app&#39;s name when it appears below</li>
+<li>Click the <em>Select</em> button</li>
+<li>Click <em>Ok</em></li>
+</ol>
+<p>You should now see your web app added:</p>
+<p><img src="images/chapter3/added.png" class="img-medium" /></p>
+<p>Click <em>Ok</em> to return to the Key Vault creation screen, and <em>Create</em> to provision the Key Vault.</p>
+<p>It will take a few minutes to deploy the Key Vault. When it&#39;s finished provisioning, pin it to your dashboard (we&#39;ll be using it a lot today).</p>
+<p>This concludes the exercise. </p>
+<div class="exercise-end"></div> 
+
+
+<h3 id="adding-secrets-to-the-key-vault">Adding Secrets to the Key Vault</h3>
+<p>Now that you have created a Key Vault and assigned access to it, let&#39;s add a secret!</p>
+<h4 class="exercise-start">
+    <b>Exercise</b>: Adding a secret to a Key Vault
+</h4>
+
+<p>Navigate to your Key Vault and select the <em>Secrets</em> area on the left:</p>
+<p><img src="images/chapter3/secrets.png" class="img-medium" /></p>
+<p>Click <em>Generate/Import</em>. </p>
+<p>For the secret name, enter <em>ConnectionStrings--DefaultConnection</em>. Copy and paste your conneciton string from the app configuration file for the value.</p>
+<blockquote>
+<p><strong>Secret Names Matter</strong></p>
+<p>Go back and look at the app configuration file for Contoso University. You&#39;ll notice the JSON structure has a ConnectionStrings key following by a sub key of DefaultConnection. This is important. </p>
+<p>In Key Vault, we&#39;ll mimick this struture by using the same key names and a double dash for the key name. Later, when we tell our web app to read the Key Vault secrets, it will be able to parse the secret name and dynamically replace the correct key/value pair in our configuration file.</p>
+</blockquote>
+<p><img src="images/chapter3/create-secret.png" /></p>
+<p>Click <em>Create</em>.</p>
+<p><img src="images/chapter3/created.png" /></p>
+<p>This concludes the exercise. </p>
+<div class="exercise-end"></div> 
+
+<h3 id="incorporating-key-vault-access-into-web-apps">Incorporating Key Vault Access into Web Apps</h3>
+<p>Now that we have secrets in our Key Vault, let&#39;s configure the web app to access the Key Vault. </p>
+<h4 class="exercise-start">
+    <b>Exercise</b>: Configuring a Web App to read configuration from a Key Vault
+</h4>
+
+<p>To configure the Contoso University app to read configuration data from the Key Vault, we need to modify the app&#39;s startup process to load it&#39;s current ocnfiguraiton file, then reach out to the Key Vault, read the secrets, and dynamically load the secret values into our configuration.</p>
+<p>Let&#39;s start by adding a few NuGet packages to the ContosoUniversity project.</p>
+<p>Right-click the Solution, and add the following packages. <strong>Be midful to add the specific version(s) we&#39;ve specified below!</strong></p>
+<ul>
+<li>Microsoft.Azure.Services.AppAuthentication, v1.2.0-preview2</li>
+<li>Microsoft.Extensions.Configuration.AzureKeyVault, v2.2.0</li>
+</ul>
+<p>Next, create a new class in the root of the ContosoUniversity project named <code>PrefixKeyVaultSecretManager.cs</code>. Place the following code inside.</p>
+<pre><code class="lang-c#">using Microsoft.Azure.KeyVault.Models;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.AzureKeyVault;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace ContosoUniversity
+{
+    public class PrefixKeyVaultSecretManager : IKeyVaultSecretManager
+    {
+        public string GetKey(SecretBundle secret)
+        {
+            // Remove the prefix from the secret name and replace two 
+            // dashes in any name with the KeyDelimiter, which is the 
+            // delimiter used in configuration (usually a colon). Azure 
+            // Key Vault doesn&#39;t allow a colon in secret names.
+            return secret.SecretIdentifier.Name
+                .Replace(&quot;--&quot;, ConfigurationPath.KeyDelimiter);
+        }
+
+        public bool Load(SecretItem secret)
+        {
+            return true;
+        }
+    }
+}
+</code></pre>
+<p>You can think of htis class as a <em>conversion</em> class. The <em>GetKey()</em> function is called each time a key/value pair is restrived from the Key Vault. The function then translates any double dashes into colons. This is an important step because .NET Core apps (like this one) natively translate colons into a heirarchical configuraiton file manner when parsing config values. </p>
+<p>So, a value of <em>ConnectionStrings--DefaultConnection</em> is translated by the <em>GetKey()</em> function into <em>ConnectionStrings:DefaultConnection</em>. Then, .NET Core reads the string and replaces the configuration key of ConnectionStrings with sub key DefaultConnection with the value pulled from the Key Vault.</p>
+<blockquote>
+<p><strong>Why not use colons in the Key Vault secret?</strong></p>
+<p>You may be wondering why we had to convert double dashes into colons. Unfortunately, key vault key names cannot contain colons, so some type of replacement delimiter must be used. I chose a double dash. </p>
+</blockquote>
+<p>Next, update the <em>CreateWebHostBuilder()</em> function in the <code>Program.cs</code> file to tie everything together. After updaitng the function, don&#39;t forget to add the missing references at top. </p>
+<pre><code class="lang-c#">public static IWebHostBuilder CreateWebHostBuilder(string[] args) =&gt;
+    WebHost.CreateDefaultBuilder(args)
+        .ConfigureAppConfiguration((context, builder) =&gt;
+        {
+            // only run in &quot;production&quot; mode, so you don&#39;t override 
+            // config values when running locally for development
+            if (context.HostingEnvironment.IsProduction())
+            {
+                var config = builder.Build();
+
+                // get MSI token from running web app
+                var tokenProvider = new AzureServiceTokenProvider(); 
+
+                // create kv client, passing MSI token for authorization
+                var keyvaultClient = new KeyVaultClient((authority, resource, scope)
+                    =&gt; tokenProvider.KeyVaultTokenCallback(authority, resource, scope));
+
+                // add the Key Vault &quot;provider&quot; that scans the KV, loading secrets into configuration
+                builder.AddAzureKeyVault(config[&quot;KeyVault:BaseUrl&quot;], keyvaultClient, new PrefixKeyVaultSecretManager());
+            }
+        })
+        .UseStartup&lt;Startup&gt;();
+</code></pre>
+<p>These additional lines of code essentially does the following:</p>
+<ol>
+<li>Only runs the Key Vault loading code when runningin production (so you don&#39;t override your development settings)</li>
+<li>Gets the MSI token from the running web app</li>
+<li>Creates a client to talk to the Key Vault through, using the token for an authorization context</li>
+<li>Adds the Key Vault &quot;provider&quot; into the pipeline that builds the configuration file. It also assumes a configuration file value of &quot;KeyVault:BaseUrl&quot; is present</li>
+</ol>
+<p>Finally, let&#39;s head on over to the configuration file and make a few changes:</p>
+<p>Change the database connection string back to the MS SQL Local DB value (this way, we&#39;ll dev in our local environment):</p>
+<pre><code>Server=(localdb)\\mssqllocaldb;Database=ContosoUniversity3;Trusted_Connection=True;MultipleActiveResultSets=true
+</code></pre><p>Add a key/value pair for the <em>KeyVault:BaseUrl</em>. Be sure to substitute the URL of your Key Vault (you can find it in the Azure Portal).</p>
+<pre><code class="lang-json">  &quot;KeyVault&quot;: {
+    &quot;BaseUrl&quot;: &quot;{your_keyvault_url_goes_here}&quot;
+  }
+</code></pre>
+<p>This is what my configuration file looks like when I&#39;m finished:</p>
+<p><img src="images/chapter3/config.png" class="img-medium" /></p>
+<p>To test your changes, run your app locally and add a new student. Then, publish your app to Azure. Navigate to the app&#39;s Azure URL and verify that the student you previously added isn&#39;t present.</p>
+<p>This concludes the exercise. </p>
+<div class="exercise-end"></div> 
+
+<h3 id="adding-authentication-to-your-app">Adding Authentication to your App</h3>
+<p>Now that we&#39;ve secured our app&#39;s secrets in the Key Vault, it&#39;s time to worry about the app itself! So far, anybody can access Contoso University&#39;s site and make changes. Let&#39;s lock it down.</p>
+<h4 class="exercise-start">
+    <b>Exercise</b>: Adding Authentication to Contoso University&#39;s app
+</h4>
+
+<p>This is a lot easier than you may think ;-)</p>
+<p>Navigate to your web app in the Azure portal and select the &quot;Authentication / Authorization&quot; option on the left.</p>
+<p><img src="images/chapter3/auth.png" class="img-override" /></p>
+<p>Change the <em>App Service Authentication</em> option to <em>On</em>, select <em>Log in with Azure Active Directory</em> form the drop down. Then, click <em>Azure Active Directory</em> authentication provider.</p>
+<p>On the next screen, select <em>Express</em> management mode, and press <em>Ok</em>. Accept all other defaults.</p>
+<p><img src="images/chapter3/aad-auth.png" class="img-override" /></p>
+<p>Press <em>Save</em> at top.</p>
+<p>That&#39;s it. Your app is now secured by Azure Active Directory. Anyone trying to access the site willbe automatically prompted to login. Try it. The first time you access it, it will prompt you to login (or detect that you&#39;re already logged into the Azure portal with the same credentials) and ask you for consent to read your login profile. Accept it.</p>
+<p><img src="images/chapter3/prompt.png" class="img-medium" /></p>
+<p>This concludes the exercise. </p>
+<div class="exercise-end"></div> 
+
+<p>Phew. This was a long chapter, but you learned some important cloud-native ways of securing secrets with the Key Vault.</p>
+
+			</div>
+			<hr>
 			<br />
 			<br />
 			<br />

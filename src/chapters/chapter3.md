@@ -1,369 +1,294 @@
-## Building Custom Speech Service data sets 
+## Increasing the Security of Deployed Apps 
 
 In this chapter, you'll learn:
-- The difference between training and testing data sets
-- How acoustic data sets are built 
-- That language data sets help the Custom Speech Service (CSS) understand the likelihood of certain words and phrases
-- That pronunciation data sets can help with simple word and and syllable replacements
+- How to secure secrets (like SQL databse connection strings) with Key Vaults
+- How to add authentication to your web apps instantly
 
-### Understanding Machine Learning Data Sets
+### Securing Secrets in Web Apps
 
-At the core of every artificial intelligence (or machine learning) problem is data. And that data is used in various capacities to train, build, and test the systems you develop. Because data is so critical to machine learning endeavors, you'll need to learn about the different ways data is used.
+Since the early days of .NET, developers have been putting SQL database connection strings in configuration files. This is not only a bad practice, but a serious security risk for several reasons:
+- login credentials are saved in plain-text 
+- it's easy to accidentally check in the credentials
 
-> **Thank you, StackExchange**
+Because of the risks of plain-text credentials, developers started encrypting the vaules, but this brought challenges with how to encrypt and decrypt, and made a developer's job more difficult.
+
+<img src="images/chapter3/better-way.gif" />
+
+There's got to be a better way!
+
+#### Key Vault to the Rescue!
+
+Introducing Key Vault! Azure Key Vault helps solve the following problems:
+
+- **Secrets Management**: Azure Key Vault can be used to Securely store and tightly control access to tokens, passwords, certificates, API keys, and other secrets
+- **Key Management**: Azure Key Vault can also be used as a Key Management solution. Azure Key Vault makes it easy to create and control the encryption keys used to encrypt your data.
+- **Certificate Management**: Azure Key Vault is also a service that lets you easily provision, manage, and deploy public and private Secure Sockets Layer/Transport Layer Security (SSL/TLS) certificates for use with Azure and your internal connected resources.
+- **Store secrets backed by Hardware Security Modules**: The secrets and keys can be protected either by software or FIPS 140-2 Level 2 validates HSMs
+
+So, with Key Vault, you store your connection strings inside of a secret store instead of in your app configuration file. Then, you simply store the location or URL of the Key Vault in your config file, so when your app starts up, you access the Key Vault, extract your secrets, then continue on as normal.
+
+> **But wait...don't I need a secret/password to access a Key Vault**
 >
-> This next section was adapted from a [StackExchange post](https://stats.stackexchange.com/questions/19048/what-is-the-difference-between-test-set-and-validation-set). Thank you to all that contributed, as you said it better than I could have.
+> Yes you do, but it doesn't make much sense to store that secret inside of your app configuration file. Afterall, that's exactly what we're trying to avoid!
 
-#### Training and Test Data Sets
+#### Accessing KeyVault without a Password
 
-In many machine learning processes, you need two types of data sets:
+That's right. You can actually access the Key Vault without a password - at least a password that you're aware of. 
 
-- In one data set (your *gold standard*) you have the input data together with correct/expected output, This data set is usually duly prepared either by humans or by collecting some data in semi-automated way. But it is important that you have the expected output for every data row here, because you need to feed the machine learning algorithms the *expected*, or *correct* results for it to learn. This data set is often referred to as the *training data set*. 
+The second critical component to securing your app secrets is something called a Managed Service Identity (or MSI for short). You can think of an MSI like a service account, but a service account that doesn't have a password. 
 
-- In the other data set, you collect the data you are going to apply your model to. In many cases this is the data where you are interested for the output of your model and thus you don't have any "expected" output here yet. This is often real-world data. 
+Within Azure, you can assign an MSI to a Web App, so when the app runs it "acts" or "takes on" the role of the MSI. So, once it's been assigned to a Web App, you can give the Web App MSI permissions to access your Key Vault. 
 
-With these two data sets, the machine learning process adheres to a standard 3-phase process:
+To the developer, this seems like magic - when you app runs, it becomes an MSI, then has permissions to access the Key Vault without a password. But behind the scenes Azure is managing the entire process, ensuring your Web App is the only resource using the assigned MSI.
 
-1. Training phase: you present your data from your "gold standard" (or *training* data set) and train your model, by pairing the input with expected output. Often you split your entire training data set into two pieces. Approximately 70% of the training data is used for training, and 30% reserved for validation/testing. The 30% reserved data is often referred to as *test* data. The result of this phase is a trained model.
+### Assigning an MSI to your Web App
 
-2. Validation/Test phase: to estimate how well your trained model has been trained, you pass in the reserved 30% of your testing data and evaluate it's accuracy. 
-
-3. Application phase: now you apply your trained model to the real-world data and get the results. Since you normally don't have any reference value in this type of data, you can only speculate about the quality of your model output using the results of your validation phase. You perform additional accuracy tests.
-
-> **Separation of Training, Test, and Real-World Data Sets**
->
-> An easy mistake to make with your training, test, and real-world data sets is overlapping data (or reusing data from one set in another). Imagine that you training a model to answer true/false questions using a series of 10 questions and answers. After the model is trained, you use the same 10 questions to evaluate how well the model performs. Ideally, it should perform 100%, but you don't know how well it *really* performs because you tested with the training data. The only true test is to use other real-world questions, then re-evaluate its performance.
-
-#### Applying Machine Learning Data Set Concepts to the Custom Speech Service
-
-Now that you know about the different types of data, you'll be creating training data sets for acoustic, language, and pronunciation data, then testing acoustic data. 
-
-> **Acoustic, Language, and Pronunciation**
->
-> Don't worry if you don't know the difference between these 3 types of data the CSS uses, you'll be learning about it next.
-
-### Acoustic Training data sets
-
-In a previous chapter, you learned about acoustic models. 
-
-> **Acoustic Model**
->
-> The acoustic model is a classifier that labels short fragments of audio into one of a number of phonemes, or sound units, in a given language. For example, the word “speech” is comprised of four phonemes “s p iy ch”. 
-
-To build acoustic models, you need acoustic data sets. An acoustic data set consists of two parts: 
-
-1. a set of audio files containing the speech data
-2. a file containing the transcriptions of all audio files
-
-#### Audio File Format and Recommendations
-
-To build testing acoustic audio data for the Custom Speech Service, you should adhere to the following guidelines:
-
-- All audio files in the data set should be stored in the WAV (RIFF) audio format.
-- The audio must have a sampling rate of 8 kHz or 16 kHz and the sample values should be stored as uncompressed PCM 16-bit signed integers (shorts).
-- Only single channel (mono) audio files are supported.
-- The audio files must be between 100ms and 1 minute in length. Each audio file should ideally start and end with at least 100ms of silence, and somewhere between 500ms and 1 second is common.
-- If you have background noise in your data, it is recommended to also have some examples with longer segments of silence, e.g. a few seconds, in your data, before and/or after the speech content.
-- Each audio file should consist of a single utterance, e.g. a single sentence for dictation, a single query, or a single turn of a dialog system.
-- Each audio file to in the data set should have a unique filename and the extension “wav”.
-- The set of audio files should be placed in a single folder without subdirectories and the entire set of audio files should be packaged as a single ZIP file archive.
-
-> **Holy Audio Requirements, Batman!**
->
-> Yeah. This is a lot to take in. Don't worry. I've already built the audio files for you. We'll take a look in a bit.
-
-#### Audio File Transcriptions
-
-The second component of acoustic data is a text file containing transcripts of each audio file. 
-
-The transcriptions for all WAV files should be contained in a single plain-text file. Each line of the transcription file should have the name of one of the audio files, followed by the corresponding transcription. The file name and transcription should be separated by a tab (\t). Each line must end with a line feed and new line character (\r\n).
-
-For example:
-
-```
-speech01.wav    speech recognition is awesome
-speech02.wav    the quick brown fox jumped all over the place
-speech03.wav    the lazy dog was not amused
-```
-
-The transcriptions should be text-normalized so they can be processed by the system. However, there are some very important normalizations that must be done by the user prior to uploading the data to the Custom Speech Service. The [normalization rules](https://docs.microsoft.com/en-us/azure/cognitive-services/custom-speech-service/customspeech-how-to-topics/cognitive-services-custom-speech-transcription-guidelines) are too lengthy to cover here, so you should check them out on your own. It may seem like a lot at first, but i've found it fairly straight-forward and I was quickly able to learn and apply them regularly.
-
-#### Prepping your acoustic data for the CSS portal
-
-In the source code you downloaded from Github, you'll find the training audio files and an audio transcript of the files in the *custom-speech-service-data/training* folder:
-
-<img src="images/chapter3/acoustic-training-data.png" class="img-override" />
-
-> **Pokemon!**
->
-> You may have noticed the file names of the acoustic data are Pokemon. My son and I have recently started to play Pokemon the Card Game together, so I thought this would be a fun way (and topic) to teach you about speech recognition. After all, Pokemon names *are* difficult to pronounce, and are a domain-specific language of their own. They're a perfect match for the capabilities of the Custom Speech Service.
-
-Let's get started by uploading an acoustic data set to the CSS portal.
+Let's get started by assigning an MSI to your web app!
 
 <h4 class="exercise-start">
-    <b>Exercise</b>: Uploading an acoustic data set to the CSS portal
+    <b>Exercise</b>: Assigning an MSI through the Azure Portal
 </h4>
 
-Start by locating the acoustic .wav audio files. Select the 17 audio files, zip them up, and name the zip file *training-utterances.zip*.
+Navigate to the web app you deployed in an earlier chapter. Mine was called *contoso-web-meb*.
 
-<img src="images/chapter3/training-utterances.gif" class="img-override" />
+Scroll down on the left to find a section named *Identity*. Click on *Identity*:
 
-Next, navigate to the CSS web portal at <a href="https://cris.ai" target="_blank">https://cris.ai</a>.
+<img src="images/chapter3/identity.png" class="img-medium" />
 
-Click the *Sign In* link in the upper right and sign in with your Azure portal subscription login.
+On the *System assigned* tab, change the status to *On* and press *Save*.
 
-After logging in, click on the *Custom Speech* navigation option and navigate to *Adpatation Data*:
+<img src="images/chapter3/system-assigned.png" class="img-medium" />
 
-<img src="images/chapter3/adaptation-data.png" class="img-override" />
+Click *Yes* when prompted.
 
-At the top of the *Adaptation Data* page, will be an area for *Acoustic Datasets*. 
+<img src="images/chapter3/accept.png" class="img-override" />
 
-<img src="images/chapter3/import1.png" class="img-override" />
+...and that's it! Your MSI (Managed Service Identity) is assigned. 
 
-Click the *Import* button and complete the following fields:
-- Name: Pokemon - Acoustic Data - Training
-- Description *blank*
-- Locale: en-US
-- Transcriptions file (.txt): upload the *training-utterances.txt* file
-- Audio files (.zip): upload the *training-utterances.zip* file you created earlier
-
-<img src="images/chapter3/import-acoustic-data.png" class="img-override" />
-
-Click *Import* to upload the acoustic data and build the data set.
-
-When the data is uploaded, you'll navigate back to the *Acoustic Datasets* page and your data set will be displayed in the grid:
-
-<img src="images/chapter3/import3.png" class="img-override" />
-
-Note the *Status* of the acoustic dataset is *NotStarted*. In a few moments, it will change to *Running*:
-
-<img src="images/chapter3/import4.png" class="img-override" />
-
-When you upload acoustic data, the CSS will analyze the data, check it for errors, and ensure the transcription file matches the uploaded audio filenames. There are a variety of other checks that are performed that aren't important, but it's good to know that there is some post-processing that needs to occur before you can use the acoustic data set.
-
-When the CSS finishes analyzing and validating the acoustic data, the *Status* will change to *Succeeded*:
-
-<img src="images/chapter3/import5.png" class="img-override" />
-
-Congratulations! You've created your first acoustic data set. We'll be using it later in this chapter.
-
-> **Curious? ...and Challenge #1**
->
-> If you're wondering what the audio files sound like, don't hesitate to download them to your computer and play them. Just remember that playing the audio files on the VM we've created for the workshop probably won't work, so you'll have to download the files to your actual computer.
->
-> If you're in the mood for a challenge, augment the training data by adding your own audio files. I've found the open-source software [Audacity](https://www.audacityteam.org/) to be a great tool for recording, editing, and exporting audio files in the right format. I suggest creating a few sample audio utterances relating to your favorite Pokemon (or try [Charizard](https://wiki.kidzsearch.com/wiki/Charizard)).
->
-> <img src="images/chapter3/charizard.png" class="img-small" />
->
-> If you do add to the acoustic data set, don't forget to transcribe your audio and add the transcription to the *training-utterances.txt* file!
+<img src="images/chapter3/assigned.png" class="img-override" />
 
 This concludes the exercise. 
 
 <div class="exercise-end"></div> 
 
-### Language Training data sets
+### Creating a Key Vault
 
-Now that you've created an acoustic data set, let's build a language data set. As you'll recall from a previous chapter, language models and language data sets teach the CSS the likelihood of encountering certain words or phrases. 
-
-> **Language Model**
->
-> The language model is a probability distribution over sequences of words. The language model helps the system decide among sequences of words that sound similar, based on the likelihood of the word sequences themselves. For example, “recognize speech” and “wreck a nice beach” sound alike but the first hypothesis is far more likely to occur, and therefore will be assigned a higher score by the language model.
-
-#### Language Data Sets
-
-To create a custom language data set for your application, you need to provide a list of example utterances to the system, for example:
-
-- "pikachu please sit down"
-- "don't sing jigglypuff you'll put me to sleep"
-- "meowth put away those sharp claws"
-
-The sentences do not need to be complete sentences or grammatically correct, and should accurately reflect the spoken input you expect the system to encounter in deployment. These examples should reflect both the style and content of the task the users will perform with your application.
-
-The language model data should be written in plain-text file using either the US-ASCII or UTF-8, depending of the locale. For en-US, both encodings are supported. The text file should contain one example (sentence, utterance, or query) per line.
-
-If you wish some sentences to have a higher weight (importance), you can add it several times to your data. A good number of repetitions is between 10 - 100. If you normalize it to 100 you can weight sentence relative to this easily.
-
-> **More Rules!**
->
-> Don't worry about these rules for now, because we've already assembled a collection of utterances appropriate for our needs today.
-
-Before we get started, take a look at the utterances in the *training-language-model-data.txt* file. Here's a short excerpt:
-
-```
-ash's best friend should sit down
-sit pikachu
-sit on the floor pikachu
-have a seat meowth
-meowth please sit on the ground
-i'd like to see ash's best friend act angry
-get really mad pikachu
-``` 
-
-You'll notice that this is a collection of commands. This is of importance and significance. Later in the workshop, you'll be using the Language Understanding (LUIS) service to analyze the intent of spoken commands. So, it makes sense that the language model we'll be building contains commands.
-
-#### Creating a Language Data Set
-
-Now that you know what is in a language data set, let's head over to the CSS portal and create one.
+Now that you have an MSI assigned to your web app, it's time to create a Key Vault and give the MSI access to read secrets.
 
 <h4 class="exercise-start">
-    <b>Exercise</b>: Uploading a language data set to the CSS portal
+    <b>Exercise</b>: Creating a Key Vault and Assigning Access
 </h4>
 
-Start by navigating to the CSS web portal at <a href="https://cris.ai" target="_blank">https://cris.ai</a>, then navigate back to the *Adaptation Data* page.
+In the Azure portal, search for the Key Vault by searching for it, like you did the SQL Database in an earlier chapter.
 
-Scroll down past the *Acoustic Datasets* area, and you'll find the *Language Datasets* area:
+<img src="images/chapter3/search-kv.png" class="img-medium" />
 
-<img src="images/chapter3/lang1.png" class="img-override" />
+Place the Key Vault in the resource group you created for the workshop:
 
-Click the *Import* button and complete the following fields:
-- Name: Pokemon - Language Data - Training
-- Description *blank*
-- Locale: en-US
-- Language data file (.txt): upload the *training-language-model-data.txt* file
+<img src="images/chapter3/create-kv.png" />
 
-<img src="images/chapter3/lang2.png" class="img-override" />
+Click the *Access policies* section, then the *+ Add new* link to add the web app MSI to the Key Vault's authorized users:
 
-Click *Import* to upload the language data and build the data set.
+<img src="images/chapter3/access-policies-kv.png" class="img-medium" />
 
-When the data is uploaded, you'll navigate back to the *Language Datasets* page and your data set will be displayed in the grid:
+Do the following:
+1. Select *Secret management* from the *Configure from template* option
+2. Click *Select principal*
+3. In the box to the right, type the name of your web app (mine was contoso-web-meb)
+4. Click your web app's name when it appears below
+5. Click the *Select* button
+6. Click *Ok*
 
-<img src="images/chapter3/lang3.png" class="img-override" />
+You should now see your web app added:
 
-Note the *Status* of the language data set is *NotStarted*. In a few moments, it will change to *Running*, the *Succeeded*, just like the acoustic data set did.
+<img src="images/chapter3/added.png" class="img-medium" />
 
-Congratulations! You've created your first language data set. We'll be using it later in this chapter.
+Click *Ok* to return to the Key Vault creation screen, and *Create* to provision the Key Vault.
 
-> **Challenge #2**
->
-> Just like you did for the acoustic data set, feel free to augment the utterances I built. I suggest continuing to create utterances related to the Pokemon you added in the last challenge.
+It will take a few minutes to deploy the Key Vault. When it's finished provisioning, pin it to your dashboard (we'll be using it a lot today).
 
 This concludes the exercise. 
 
 <div class="exercise-end"></div> 
 
-### Pronunciation Training data sets
 
-Now that you've created acoustic and language data sets, you could be ready to move on to designing the models for each. But, there's another customization you can provide that helps to train you model in a special way: pronunciation data.
+### Adding Secrets to the Key Vault
 
-Custom pronunciation enables users to define the phonetic form and display of a word or term. It is useful for handling customized terms, such as product names or acronyms. All you need is a pronunciation file (a simple .txt file).
-
-Here's how it works. In a single .txt file, you can enter several custom pronunciation entries. The structure is as follows:
-
-```
-Display form <Tab>(\t) Spoken form <Newline>(\r\n)
-```
-
-#### Requirements for the spoken form
-
-The spoken form must be lowercase, which can be forced during the import. No tab in either the spoken form or the display form is permitted. There might, however, be more forbidden characters in the display form (for example, ~ and ^).
-
-Each .txt file can have several entries. For example, see the following screenshot:
-
-<img src="images/chapter3/custom-speech-pronunciation-file.png" class="img-override" />
-
-The spoken form is the phonetic sequence of the display form. It is composed of letters, words, or syllables. Currently, there is no further guidance or set of standards to help you formulate the spoken form.
-
-#### When to use Pronunciation data
-
-I've found it useful to use pronunciation in a variety of circumstances. In the above example, pronunciation helps transform *see three pee oh* to *C3PO*. I've also used it in the past to transform *a t and t* to *AT&T*, and *microsoft dot com* to *Microsoft.com*.
-
-#### Adding a Pronunciation Data Set
-
-For your final data set, you'll create a pronunciation data set. Let's get to it!
+Now that you have created a Key Vault and assigned access to it, let's add a secret!
 
 <h4 class="exercise-start">
-    <b>Exercise</b>: Uploading a pronunciation data set to the CSS portal
+    <b>Exercise</b>: Adding a secret to a Key Vault
 </h4>
 
-Start by navigating to the CSS web portal at <a href="https://cris.ai" target="_blank">https://cris.ai</a>, then navigate back to the *Adaptation Data* page.
+Navigate to your Key Vault and select the *Secrets* area on the left:
 
-Scroll down past the *Language Datasets* area, and you'll find the *Pronunciation Datasets* area:
+<img src="images/chapter3/secrets.png" class="img-medium" />
 
-<img src="images/chapter3/pro1.png" class="img-override" />
+Click *Generate/Import*. 
 
-Click the *Import* button and complete the following fields:
-- Name: Pokemon - Pronunciation Data - Training
-- Description *blank*
-- Locale: en-US
-- Language data file (.txt): upload the *training-pronunciation-data.txt* file
+For the secret name, enter *ConnectionStrings--DefaultConnection*. Copy and paste your conneciton string from the app configuration file for the value.
 
-<img src="images/chapter3/pro2.png" class="img-override" />
-
-Click *Import* to upload the pronunciation data and build the data set.
-
-When the data is uploaded, you'll navigate back to the *Pronunciation Datasets* page and your data set will be displayed in the grid:
-
-<img src="images/chapter3/pro3.png" class="img-override" />
-
-Note the *Status* of the language data set is *NotStarted*. In a few moments, it will change to *Running*, the *Succeeded*, just like the acoustic data set did.
-
-Congratulations! You've created your first pronunciation data set. We'll be using it in the next chapter.
-
-> **Challenge #3**
+> **Secret Names Matter**
 >
-> I bet you can't guess what this challenge is about... This is a more difficult challenge, probably. That's because you don't really know about your problem domain yet. Typically, you add pronunciation data sets once you know more about your problem domain that you're trying to train for. But, if you think you can add something to what we already have, go for it!
+> Go back and look at the app configuration file for Contoso University. You'll notice the JSON structure has a ConnectionStrings key following by a sub key of DefaultConnection. This is important. 
+>
+> In Key Vault, we'll mimick this struture by using the same key names and a double dash for the key name. Later, when we tell our web app to read the Key Vault secrets, it will be able to parse the secret name and dynamically replace the correct key/value pair in our configuration file.
+
+<img src="images/chapter3/create-secret.png" />
+
+Click *Create*.
+
+<img src="images/chapter3/created.png" />
 
 This concludes the exercise. 
 
 <div class="exercise-end"></div> 
 
-### Acoustic Testing data sets
+### Incorporating Key Vault Access into Web Apps
 
-You'll recall earlier in this chapter that there are multiple types of data sets we'll need: training, testing, and real-world. 
-
-So far, you've created 3 training data sets: acoustic, language, and pronunciation. Next, you'll need to create a testing data set.
-
-#### Testing Data Sets are Acoustic Data Sets
-
-Here's a secret - testing data sets for the CSS *are* acoustic data sets. And here's why. Think about it - an acoustic data set provides audio files, with transcriptions of the audio file content. As a result, an acoustic data set is ideal for testing because it includes audio files, and their actual content.
-
-Now, we have to be a bit careful, because it's easy to confuse your training and testing data sets because they are both acoustic data sets. So, as we create a second acoustic data set, we'll be sure to name it properly - with *testing* in it's name. 
+Now that we have secrets in our Key Vault, let's configure the web app to access the Key Vault. 
 
 <h4 class="exercise-start">
-    <b>Exercise</b>: Creating a testing acoustic data set
+    <b>Exercise</b>: Configuring a Web App to read configuration from a Key Vault
 </h4>
 
-Start by locating the testing files we included in the workshop files. You'll find 6 .wav audio files in the *custom-speech-service-data/testing* folder:
+To configure the Contoso University app to read configuration data from the Key Vault, we need to modify the app's startup process to load it's current ocnfiguraiton file, then reach out to the Key Vault, read the secrets, and dynamically load the secret values into our configuration.
 
-<img src="images/chapter3/files.png" class="img-override" />
+Let's start by adding a few NuGet packages to the ContosoUniversity project.
 
-Select the 6 audio files, zip them up, and name the zip file *testing-utterances.zip*.
+Right-click the Solution, and add the following packages. **Be midful to add the specific version(s) we've specified below!**
 
-<img src="images/chapter3/testing-utterances.gif" class="img-override" />
+- Microsoft.Azure.Services.AppAuthentication, v1.2.0-preview2
+- Microsoft.Extensions.Configuration.AzureKeyVault, v2.2.0
 
-Next, navigate to the CSS web portal at <a href="https://cris.ai" target="_blank">https://cris.ai</a>, and navigate to *Adpatation Data*.
+Next, create a new class in the root of the ContosoUniversity project named `PrefixKeyVaultSecretManager.cs`. Place the following code inside.
 
-Click the *Import* button by *Acoustic Datasets* and complete the following fields:
-- Name: Pokemon - Acoustic Data - Testing
-- Description *blank*
-- Locale: en-US
-- Transcriptions file (.txt): upload the *testing-acoustic-model-data.txt* file
-- Audio files (.zip): upload the *testing-utterances.zip* file you created earlier
+```c#
+using Microsoft.Azure.KeyVault.Models;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.AzureKeyVault;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
-<img src="images/chapter3/testing2.png" class="img-override" />
+namespace ContosoUniversity
+{
+    public class PrefixKeyVaultSecretManager : IKeyVaultSecretManager
+    {
+        public string GetKey(SecretBundle secret)
+        {
+            // Remove the prefix from the secret name and replace two 
+            // dashes in any name with the KeyDelimiter, which is the 
+            // delimiter used in configuration (usually a colon). Azure 
+            // Key Vault doesn't allow a colon in secret names.
+            return secret.SecretIdentifier.Name
+                .Replace("--", ConfigurationPath.KeyDelimiter);
+        }
 
-Click *Import* to upload the acoustic data and build the data set.
+        public bool Load(SecretItem secret)
+        {
+            return true;
+        }
+    }
+}
+```
 
-When the data is uploaded, you'll navigate back to the *Acoustic Datasets* page and your data set will be displayed in the grid:
+You can think of htis class as a *conversion* class. The *GetKey()* function is called each time a key/value pair is restrived from the Key Vault. The function then translates any double dashes into colons. This is an important step because .NET Core apps (like this one) natively translate colons into a heirarchical configuraiton file manner when parsing config values. 
 
-<img src="images/chapter3/testing3.png" class="img-override" />
+So, a value of *ConnectionStrings--DefaultConnection* is translated by the *GetKey()* function into *ConnectionStrings:DefaultConnection*. Then, .NET Core reads the string and replaces the configuration key of ConnectionStrings with sub key DefaultConnection with the value pulled from the Key Vault.
 
-Note the *Status* of the acoustic dataset is *NotStarted*. In a few moments, it will change to *Running*, then *Succeeded*.
-
-Congratulations! You've created your testing acoustic data set. 
-
-> **Challenge #4**
+> **Why not use colons in the Key Vault secret?**
 >
-> Yes. Again. Feel free to augment the testing data set you just created. Remember - don't overlap training/testing data, and make the data similar enough. For example, if you added *Charizard* to your training data sets, it would be a good idea to test for *Charizard*. Likewise, if you didn't add another pokemon, like *Chespin*, you shouldn't expect the CSS to magically recognize it.
->
-> <img src="images/chapter3/chespin.jpeg" class="img-small" />
+> You may be wondering why we had to convert double dashes into colons. Unfortunately, key vault key names cannot contain colons, so some type of replacement delimiter must be used. I chose a double dash. 
+
+Next, update the *CreateWebHostBuilder()* function in the `Program.cs` file to tie everything together. After updaitng the function, don't forget to add the missing references at top. 
+
+```c#
+public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
+    WebHost.CreateDefaultBuilder(args)
+        .ConfigureAppConfiguration((context, builder) =>
+        {
+            // only run in "production" mode, so you don't override 
+            // config values when running locally for development
+            if (context.HostingEnvironment.IsProduction())
+            {
+                var config = builder.Build();
+
+                // get MSI token from running web app
+                var tokenProvider = new AzureServiceTokenProvider(); 
+
+                // create kv client, passing MSI token for authorization
+                var keyvaultClient = new KeyVaultClient((authority, resource, scope)
+                    => tokenProvider.KeyVaultTokenCallback(authority, resource, scope));
+
+                // add the Key Vault "provider" that scans the KV, loading secrets into configuration
+                builder.AddAzureKeyVault(config["KeyVault:BaseUrl"], keyvaultClient, new PrefixKeyVaultSecretManager());
+            }
+        })
+        .UseStartup<Startup>();
+```
+
+These additional lines of code essentially does the following:
+1. Only runs the Key Vault loading code when runningin production (so you don't override your development settings)
+2. Gets the MSI token from the running web app
+3. Creates a client to talk to the Key Vault through, using the token for an authorization context
+4. Adds the Key Vault "provider" into the pipeline that builds the configuration file. It also assumes a configuration file value of "KeyVault:BaseUrl" is present
+
+Finally, let's head on over to the configuration file and make a few changes:
+
+Change the database connection string back to the MS SQL Local DB value (this way, we'll dev in our local environment):
+
+```
+Server=(localdb)\\mssqllocaldb;Database=ContosoUniversity3;Trusted_Connection=True;MultipleActiveResultSets=true
+```
+
+Add a key/value pair for the *KeyVault:BaseUrl*. Be sure to substitute the URL of your Key Vault (you can find it in the Azure Portal).
+
+```json
+  "KeyVault": {
+    "BaseUrl": "{your_keyvault_url_goes_here}"
+  }
+```
+
+This is what my configuration file looks like when I'm finished:
+
+<img src="images/chapter3/config.png" class="img-medium" />
+
+To test your changes, run your app locally and add a new student. Then, publish your app to Azure. Navigate to the app's Azure URL and verify that the student you previously added isn't present.
 
 This concludes the exercise. 
 
 <div class="exercise-end"></div> 
 
-Phew! That was a long chapter! But, you learned quite a bit, like:
-- the importance of separating training data from testing data
-- that acoustic data is a combination of .wav files and normalized text transcripts
-- pronunciation data sets can help your CSS models interpret multi-word phrases into an abbreviation - like C3PO and AT&T
+### Adding Authentication to your App
 
+Now that we've secured our app's secrets in the Key Vault, it's time to worry about the app itself! So far, anybody can access Contoso University's site and make changes. Let's lock it down.
+
+<h4 class="exercise-start">
+    <b>Exercise</b>: Adding Authentication to Contoso University's app
+</h4>
+
+This is a lot easier than you may think ;-)
+
+Navigate to your web app in the Azure portal and select the "Authentication / Authorization" option on the left.
+
+<img src="images/chapter3/auth.png" class="img-override" />
+
+Change the *App Service Authentication* option to *On*, select *Log in with Azure Active Directory* form the drop down. Then, click *Azure Active Directory* authentication provider.
+
+On the next screen, select *Express* management mode, and press *Ok*. Accept all other defaults.
+
+<img src="images/chapter3/aad-auth.png" class="img-override" />
+
+Press *Save* at top.
+
+That's it. Your app is now secured by Azure Active Directory. Anyone trying to access the site willbe automatically prompted to login. Try it. The first time you access it, it will prompt you to login (or detect that you're already logged into the Azure portal with the same credentials) and ask you for consent to read your login profile. Accept it.
+
+<img src="images/chapter3/prompt.png" class="img-medium" />
+
+This concludes the exercise. 
+
+<div class="exercise-end"></div> 
+
+Phew. This was a long chapter, but you learned some important cloud-native ways of securing secrets with the Key Vault.
