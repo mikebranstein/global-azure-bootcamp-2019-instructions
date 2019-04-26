@@ -279,7 +279,7 @@ Change the *App Service Authentication* option to *On*, select *Log in with Azur
 
 On the next screen, select *Express* management mode, and press *Ok*. Accept all other defaults.
 
-<img src="images/chapter3/aad-auth.png" class="img-override" />
+<img src="images/chapter3/aad-auth.png" class="img-medium" />
 
 Press *Save* at top.
 
