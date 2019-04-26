@@ -897,81 +897,243 @@ namespace ContosoUniversityApi.Controllers
 <p>This concludes the exercise. </p>
 <div class="exercise-end"></div>  
 
-<p>There&#39;s not much more to do with the acoustic model, so let&#39;s do the same with our language data set and train a language model</p>
-<h3 id="language-models">Language Models</h3>
-<p>Training language models is just like training acoustic models, so let&#39;s dive in.</p>
+<p>Now that you&#39;ve created the API project, it&#39;s time to refactor the Web project controllers to call the API project&#39;s REST endpoints instead of using Entity Framework.</p>
+<p>Let&#39;s get to work.</p>
 <h4 class="exercise-start">
-    <b>Exercise</b>: Training a language model
+    <b>Exercise</b>: Refactoring the Web project to call a REST API
 </h4>
 
-<p>Start by navigating to the CSS web portal at <a href="https://cris.ai" target="_blank">https://cris.ai</a>, and navigate to <em>Language Models</em>. </p>
-<p><img src="images/chapter4/lang-model1.png" class="img-override" /></p>
-<p>This page shows the various language models you&#39;ve trained for the CSS.</p>
-<p>Click the <em>Create New</em> button and complete the following fields:</p>
-<ul>
-<li>Locale: en-US</li>
-<li>Name: Pokemon - Language Model</li>
-<li>Description: <em>blank</em></li>
-<li>Base Language Model: Microsoft Search and Diction Model</li>
-<li>Language Data: Pokemon - Language Data - Training</li>
-<li>Pronunciation Data: Pokemon - Pronunciation Data - Training</li>
-<li>Subscription: <em>your subscription</em></li>
-<li>Accuracy Testing: <em>unchecked</em>, b/c we&#39;ve already run a test</li>
-</ul>
-<p><img src="images/chapter4/lang-model2.png" class="img-override" /></p>
-<p>Click <em>Create</em> to train the model.</p>
-<p>When the model is saved, you&#39;ll navigate back to the <em>Language Models</em> page:</p>
-<p><img src="images/chapter4/lang-model3.png" class="img-override" /></p>
-<p>Note the <em>Status</em> of the test run is <em>NotStarted</em>. In a few moments, it will change to <em>Running</em>, then <em>Succeeded</em>.</p>
-<p>The training process may take some time to execute (up to 10 minutes). So, it&#39;s a good time to take yet another short break. Check back in another 5.</p>
-<div style="padding-left: 20px;"> <iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/8_lfxPI5ObM?rel=0" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe> </div>
+<p>Start with the Web Courses controller.</p>
+<h4 id="web-project-courses-controller">Web Project - Courses Controller</h4>
+<p>First, replace the CoursesController constructor with the following:</p>
+<pre><code class="lang-c#">private readonly IConfiguration _configuration;
 
-<p>Welcome back, again. This video was for me. I <em>love</em> Tesla. Hopefully, I&#39;ll get one someday. Someday soon.</p>
-<p>So, let&#39;s check back in on the model training:</p>
-<p><img src="images/chapter4/lang-model4.png" class="img-override" /></p>
-<p>Excellent, it&#39;s finished.</p>
+public CoursesController(SchoolContext context, IConfiguration configuration)
+{
+    _context = context;
+    _configuration = configuration;
+}
+</code></pre>
+<p>This will use ASP.NET Core&#39;s built-in dependency injection to obtain a reference to the app&#39;s configuration objects. </p>
+<p>Next, replace the HTTP GET Index() method with the following:</p>
+<pre><code class="lang-c#">// GET: Courses
+public async Task&lt;IActionResult&gt; Index()
+{
+    using (var httpClient = new HttpClient())
+    {
+        try
+        {
+            httpClient.BaseAddress = new Uri(_configuration[&quot;Api:BaseAddress&quot;]);
+            var response = await httpClient.GetAsync($&quot;{_configuration[&quot;Api:ApiPath&quot;]}/api/Courses&quot;);
+            response.EnsureSuccessStatusCode();
+
+            var stringResult = await response.Content.ReadAsStringAsync();
+
+            var courses = JsonConvert.DeserializeObject&lt;IEnumerable&lt;Course&gt;&gt;(stringResult);
+            return View(courses);
+        }
+        catch (HttpRequestException httpRequestException)
+        {
+            return BadRequest($&quot;Error getting request: {httpRequestException.Message}&quot;);
+        }
+    }
+}
+</code></pre>
+<p>As you&#39;ll notice, this code creates an HTTP client, configures it to access a Uri (configured from the Api:BaseAddress configuration setting), then gets the resource at {Api:ApiPath}/api/Courses.</p>
+<p>This means that we&#39;ll need to create a few configuration variables. Add values for Api:BaseAddress and Api:ApiPath to the configuration file:</p>
+<pre><code class="lang-json">&quot;Api&quot;: {
+    &quot;BaseAddress&quot;: &quot;https://localhost:XXXXX&quot;,
+    &quot;ApiPath&quot;:  &quot;&quot;
+}
+</code></pre>
+<blockquote>
+<p><strong>BaseAdress needs customization</strong></p>
+<p>You&#39;ll notice that the code snippet above has <a href="http://localhost:XXXXX">http://localhost:XXXXX</a> for the BaseAddress value. You&#39;ll need to replace the <em>XXXXX</em> with the port number your local API project is running on. Check the API project&#39;s launchSettings.json file for the <em>sslPort</em> value.</p>
+</blockquote>
+<p>You&#39;ll also notice that the Api:ApiPath value is empty - that&#39;s OK. Sometimes, IIS hosts APIs in a virtual directory - and in fact, we&#39;ll be using it in a later chapter.</p>
+<h4 id="web-project-students-controller">Web Project - Students Controller</h4>
+<p>Next, update the Students controller constructor with this code:</p>
+<pre><code class="lang-c#">private readonly IConfiguration _configuration;
+
+public StudentsController(SchoolContext context, IConfiguration configuration)
+{
+    _context = context;
+    _configuration = configuration;
+}
+</code></pre>
+<p>Then, update the HTTP POST Create() method:</p>
+<pre><code class="lang-c#">// POST: Students/Create
+// To protect from overposting attacks, please enable the specific properties you want to bind to, for 
+// more details see http://go.microsoft.com/fwlink/?LinkId=317598.
+[HttpPost]
+[ValidateAntiForgeryToken]
+public async Task&lt;IActionResult&gt; Create(
+    [Bind(&quot;EnrollmentDate,FirstMidName,LastName&quot;)] Student student)
+{
+    if (ModelState.IsValid)
+    {
+        using (var httpClient = new HttpClient())
+        {
+            try
+            {
+                httpClient.BaseAddress = new Uri(_configuration[&quot;Api:BaseAddress&quot;]);
+                var response = await httpClient.PostAsJsonAsync&lt;Student&gt;($&quot;{_configuration[&quot;Api:ApiPath&quot;]}/api/Students&quot;, student);
+                response.EnsureSuccessStatusCode();
+                return RedirectToAction(nameof(Index));
+            }
+            catch (HttpRequestException httpRequestException)
+            {
+                //Log the error (uncomment ex variable name and write a log.
+                ModelState.AddModelError(&quot;&quot;, &quot;Unable to save changes. &quot; +
+                    &quot;Try again, and if the problem persists &quot; +
+                    &quot;see your system administrator.&quot;);
+            }
+        }
+    }
+    return View(student);
+}
+</code></pre>
+<p>Just like the Course controller, the HttpClient class is used to make an HTTP request to the API project (using the same configuration variables).</p>
+<h4 id="testing-your-changes">Testing your changes</h4>
+<p>To run both projects at once, right-click the solution, navigate to the <em>Properties</em> page, and under <em>Startup Project</em>, select <em>Multiple startup projects</em> and <em>Start</em> for the Web and API projects.</p>
+<p><img src="images/chapter4/multiple-startup.png" class="img-medium" /></p>
+<p>Run the projects, then:</p>
+<ul>
+<li>Navigate to the Courses page</li>
+<li>Try adding a Student</li>
+</ul>
 <p>This concludes the exercise. </p>
 <div class="exercise-end"></div>  
 
-<h3 id="testing-the-trained-models">Testing the Trained Models</h3>
-<p>Now that you&#39;ve built an acoustic model and language model that customizes the base models, let&#39;s test them! The original WER was 45%, so I think we can do better. </p>
+
+<h3 id="using-swagger-to-build-an-api-definition">Using Swagger to Build an API Definition</h3>
+<p>Having a REST API deployed somewhere is just fine, but you need other developers know how they can interact with the API. That&#39;s where Swagger Specifications (a.k.a. OpenAPI Specifications) come in.</p>
+<h4 id="what-is-swagger-openapi-specification-">What is Swagger (OpenAPI) Specification?</h4>
+<p>The OpenAPI Specification (OAS), formerly known as the Swagger Specification, is the world’s standard for defining RESTful interfaces. The OAS enables developers to design a technology-agnostic API interface that forms the basis of their API development and consumption.</p>
+<p>You can learn more at <a href="https://swagger.io/resources/open-api/">Swagger&#39;s website</a> if you&#39;re interested, but in summary, Swagger provides tools that can scan your API project and create a common-language specification document (in JSON) that describes all available REST commands for your API.</p>
+<p>Swagger is easy to use, so let&#39;s get started.</p>
 <h4 class="exercise-start">
-    <b>Exercise</b>: Performing an accuracy test on your trained models
+    <b>Exercise</b>: Adding Swagger to your API project
 </h4>
 
-<p>Start by navigating to the CSS web portal at <a href="https://cris.ai" target="_blank">https://cris.ai</a>, and navigate to <em>Accuracy Tests</em>. </p>
-<p>Click the <em>Create New</em> button to begin a test against an acoustic and language model.</p>
-<p>Complete the following fields:</p>
+<p>To add Swagger to your API project, add the following NuGet packages (and specific versions) to your API project:</p>
 <ul>
-<li>Locale: en-US</li>
-<li>Subscription: <em>the one you created earlier</em></li>
-<li>Base Model: Microsoft Search and Diction Model, then select the Pokemon models below</li>
-<li>Acoustic Data: Pokemon - Acoustic Data - Testing</li>
+<li>Swashbuckle.AspNetCore, v5.0.0-rc2</li>
+<li>Swashbuckle.AspNetCore.Swagger, v5.0.0-rc2</li>
 </ul>
-<p><img src="images/chapter4/test6.png" class="img-override" /></p>
-<p>Click <em>Create</em> to begin the test run.</p>
-<p>When the test run is saved, you&#39;ll navigate back to the <em>Accuracy Test Results</em> page:</p>
-<p><img src="images/chapter4/test7.png" class="img-override" /></p>
-<p>Note the <em>Status</em> of the test run is <em>NotStarted</em>. In a few moments, it will change to <em>Running</em>, then <em>Succeeded</em>.</p>
-<p>The test run may take some time to execute (up to 10 minutes). So, it&#39;s a good time to take a short break. Check back in 2.</p>
-<div style="padding-left: 20px;"> <iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/A0FZIwabctw?rel=0" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe> </div>
+<p>These packages add code generation capabilities to auto-generate a swagger.json file to describe your API and a middleware layer that hosts a Swagger UI to visualize and quickly test your API.</p>
+<p>Next, update the <em>ConfigurationServices()</em> method of the Startup class:</p>
+<pre><code class="lang-c#">// This method gets called by the runtime. Use this method to add services to the container.
+public void ConfigureServices(IServiceCollection services)
+{
+    services.AddDbContext&lt;SchoolContext&gt;(options =&gt;
+        options.UseSqlServer(Configuration.GetConnectionString(&quot;DefaultConnection&quot;)));
 
-<p>This one was for everyone. And it&#39;s amazing.</p>
-<p>So, let&#39;s check back in on the accuracy test.</p>
-<p><img src="images/chapter4/test8.png" class="img-override" /></p>
-<p>Sweet! Look at that - 6% WER. I&#39;m ok with that (for now). Feel free to explore the details of the accuracy test to learn more.</p>
-<blockquote>
-<p><strong>Challenge #5</strong></p>
-<p>Try to get the accuracy test WER down to 0%. Enough said.</p>
-</blockquote>
+    services
+        .AddMvc()
+        .SetCompatibilityVersion(CompatibilityVersion.Version_2_2)
+        .AddJsonOptions(
+            options =&gt; options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore
+        );
+
+    // Register the Swagger generator, defining 1 or more Swagger documents
+    services.AddSwaggerGen(c =&gt;
+    {
+        c.SwaggerDoc(&quot;v1&quot;, new OpenApiInfo { Title = &quot;ContosoUniversity&quot;, Version = &quot;v1&quot; });
+    });
+}
+</code></pre>
+<p>Then update the <em>Configure()</em> method:</p>
+<pre><code class="lang-c#">// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+{
+    if (env.IsDevelopment())
+    {
+        app.UseDeveloperExceptionPage();
+    }
+    else
+    {
+        // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+        app.UseHsts();
+    }
+
+    // Enable middleware to serve generated Swagger as a JSON endpoint.
+    app.UseSwagger();
+
+    // Enable middleware to serve swagger-ui (HTML, JS, CSS, etc.), 
+    // specifying the Swagger JSON endpoint.
+    app.UseSwaggerUI(c =&gt;
+    {
+        c.SwaggerEndpoint(&quot;/swagger/v1/swagger.json&quot;, &quot;My API V1&quot;);
+    });
+
+    app.UseHttpsRedirection();
+    app.UseMvc();
+}
+</code></pre>
+<h4 id="testing-our-your-changes">Testing our your changes</h4>
+<p>Launch the API project and navigate to <a href="https://localhost:XXXXX/swagger/v1/swagger.json">https://localhost:XXXXX/swagger/v1/swagger.json</a>. You should see a JSON file the browser:</p>
+<p><img src="images/chapter4/swagger-json.png" class="img-medium" /></p>
+<p>Next, navigate to <a href="https://localhost:XXXXX/swagger">https://localhost:XXXXX/swagger</a> to see the interactive UI:</p>
+<p><img src="images/chapter4/swagger-ui.png" class="img-medium" /></p>
+<p>Nice work! Take a few minutes to experiment with the Swagger UI - you&#39;l notice that it has scanned your .NET code and determined there are 2 API endpoints: api/courses and api/students. You can even try out calls to it dynamically via the UI.</p>
+<p>Exciting!</p>
 <p>This concludes the exercise. </p>
 <div class="exercise-end"></div> 
 
+<h3 id="deploying-the-updated-projects-to-azure">Deploying the updated Projects to Azure</h3>
+<p>Now that we&#39;ve tested our code locally, let&#39;s get it into Azure. </p>
+<h4 class="exercise-start">
+    <b>Exercise</b>: Deploying and testing in Azure
+</h4>
+
+<p>To deploy an test in Azure we have 3 steps:</p>
+<ol>
+<li>Publish the API project to a new Web App</li>
+<li>Add the new secrets to our Key Vault (for Api:BaseAddress and Api:ApiPath)</li>
+<li>Publish the Web project to the existing Web App</li>
+</ol>
+<p>Let&#39;s get started.</p>
+<h4 id="publishing-the-api-project">Publishing the API project</h4>
+<p>You&#39;ve done this before with the Web project, so follow the same steps to create a new Web App. A few things to remember as you go through this process:</p>
+<ul>
+<li>When creating the new Web App, take notes of it&#39;s URL</li>
+<li>Use the same resource group you created earlier</li>
+<li>You can reuse the Free App Plan</li>
+</ul>
+<p>After publishing the API project, you&#39;ll notice that the site won&#39;t load:</p>
+<p><img src="images/chapter4/failure.png" class="img-override" /></p>
+<p>That&#39;s because it cannot access your Key Vault! If you recall in the previous chapter, we added the Web project MSI to the access policies of the Key Vault. Now, we need to do the same steps for the API project. </p>
+<p>I won&#39;t walk you through the details, but will outline the high-level steps and let you try it on your own:</p>
+<ol>
+<li>Add an MSI account to the API project you just created</li>
+<li>Add this MSI account to the <em>Secrets Management</em> access policy on the Key Vault</li>
+<li>Restart the API web app to have it attempt to access the Key Vault </li>
+</ol>
+<h4 id="updating-the-key-vault">Updating the Key Vault</h4>
+<p>Navigate to the Secrets area of your Key Vault and add the following key/value pairs:</p>
+<ul>
+<li>Api--BaseAddress: the URL of the new API web app, mine was <a href="https://contoso-web-api-meb.azurewebsites.net">https://contoso-web-api-meb.azurewebsites.net</a></li>
+<li>Api--ApiPath: {empty string, for now}</li>
+</ul>
+<p>Note: now that you&#39;ve added these values, you may need to restart the API web app again to have it read the updated values.</p>
+<h4 id="publishing-the-web-project">Publishing the Web project</h4>
+<p>You&#39;ve done this before, so just republish. If you need help, check back at an earlier chapter.</p>
+<h4 id="testing-your-changes">Testing your changes</h4>
+<p>After you&#39;ve published the Web Site, navigate to it and try to:</p>
+<ul>
+<li>View the list of courses</li>
+<li>Add a new student</li>
+</ul>
+<p>This concludes the exercise. </p>
+<div class="exercise-end"></div> 
+
+
 <p>In this chapter, you learned:</p>
 <ul>
-<li>why it&#39;s important to test Microsoft&#39;s base model to establish a baseline accuracy</li>
-<li>how to create acoustic and language models</li>
-<li>how to improve CSS accuracy by building customized models </li>
+<li>How to create a Web API project to centralize data access</li>
+<li>How to advertise REST APIs using Swagger</li>
+<li>How to call REST APIs from a ASP.NET Core MVC app </li>
 </ul>
 
 			</div>
