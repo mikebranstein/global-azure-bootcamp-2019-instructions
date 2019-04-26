@@ -737,104 +737,163 @@ namespace ContosoUniversity
 			</div>
 			<hr>
 			<div class="chapter">
-				<h2 id="custom-speech-service-models">Custom Speech Service Models</h2>
+				<h2 id="decoupling-web-apps-from-data-access-with-a-rest-api-service-layer">Decoupling Web Apps from Data Access with a REST API Service Layer</h2>
 <p>In this chapter, you&#39;ll learn how to:</p>
 <ul>
-<li>perform testing on Microsoft&#39;s base models</li>
-<li>train acoustic and language models</li>
-<li>demonstrate that your hard work of creating custom models pays off by dramatically increasing the accuracy of Microsoft&#39;s base models</li>
+<li>Create a Web API REST service that can be shared across applications</li>
+<li>Remove direct data access from MVC controllers  </li>
+<li>Use Swagger to create an easy-to-use REST API explorer</li>
 </ul>
 <h3 id="overview">Overview</h3>
-<p>After creating Custom Speech Service (CSS) data sets, you need to instruct CSS to train models based on these data sets. </p>
-<p>Training acoustic and language models is easy to do in the CSS portal - point and click. But, before we do that, we&#39;ll take a pit stop and establish a baseline accuracy of the CSS capabilities using Microsoft&#39;s base models.</p>
-<blockquote>
-<p><strong>Base Models - What Are They?</strong></p>
-<p>The CSS comes with several pre-trained acoustic and language models. In fact, there are different models for conversations and search/diction. If you stop to think about it, this makes a lot of sense. We tend to speak differently when we converse with others, as compared to dictating text or speaking search terms for a search engine. See below for the base models Microsoft provides.</p>
-<p><img src="images/chapter4/model1.png" class="img-override" /></p>
-</blockquote>
-<h3 id="testing-the-accuracy-of-the-base-models">Testing the Accuracy of the Base Models</h3>
-<p>To understand the effect our CSS customization will have, it&#39;s important to establish a baseline accuracy for the CSS service against our testing data set.</p>
-<p>Let&#39;s get started and see how the CSS does against some of these Pokemon names ;-)</p>
+<p>If you take a moment to investigate the ContosoUniversity MVC app, you&#39;ll notice that the MVC model and Entity Framework DbContext classes are split out in a shared library (ContosoUniversityData); however, much of the data access is being done in the controllers. This isn&#39;t &quot;wrong&quot;, and it&#39;s a valid approach for small, simple applications. </p>
+<p>Althgouh not &quot;wrong&quot; it can reduce code reuse and encourge developers to re-write the same type of code over and over again. For example, let&#39;s assume Contoso&#39;s accounting department needs access to student data in their application - all of a sudden it becomes easier for the developers working on that project to tie directly into the database, or write their own DbContext. And, before you know it, there are 4 different applications all attached to this database, extracting and manipulating data separately. </p>
+<p>This is wrong, and it&#39;s a code smell.</p>
+<p>Now, imaging that one of these teams needs a change made to how Students are tracked - how do you manage that across all the disparate applications? This is how an innocent seemingly-innocuous change can affect an entire organization downstream. </p>
+<p>So, what&#39;s a devleoper to do? </p>
+<p>There are a number of approaches and architectural patterns that exist to combat this scenario. In today&#39;s workshop, we&#39;re going to take a very niave, first-step approach to decoupling the web UI layer from the data access layer by creating a Web API project that abstracts the data access into a single, re-usable place. When that&#39;s finished, you&#39;ll have a single (and versioned) interface to access Contoso University data.</p>
+<p>Let&#39;s get started.</p>
+<h3 id="creating-the-web-api-project">Creating the Web API Project</h3>
+<p>Our first step is to create a Web API project.</p>
 <h4 class="exercise-start">
-    <b>Exercise</b>: Performing an accuracy test on the Microsoft base model
+    <b>Exercise</b>: Creating a Web API Project
 </h4>
 
-<p>Start by navigating to the CSS web portal at <a href="https://cris.ai" target="_blank">https://cris.ai</a>, and navigate to <em>Accuracy Tests</em>. </p>
-<p><img src="images/chapter4/test1.png" class="img-override" /></p>
-<p>This page shows the status of the past and ongoing accuracy tests performed by the CSS.</p>
-<p>Click the <em>Create New</em> button to begin a test against an acoustic and language model.</p>
-<p>Complete the following fields:</p>
-<ul>
-<li>Locale: en-US</li>
-<li>Subscription: <em>the one you created earlier</em></li>
-<li>Base Model: Microsoft Search and Diction Model, then select the base acoustic and base language models below</li>
-<li>Acoustic Data: Pokemon - Acoustic Data - Testing</li>
-</ul>
-<p><img src="images/chapter4/test2.png" class="img-override" /></p>
-<p>Click <em>Create</em> to begin the test run.</p>
-<p>When the test run is saved, you&#39;ll navigate back to the <em>Accuracy Test Results</em> page:</p>
-<p><img src="images/chapter4/test3.png" class="img-override" /></p>
-<p>Note the <em>Status</em> of the test run is <em>NotStarted</em>. In a few moments, it will change to <em>Running</em>, then <em>Succeeded</em>.</p>
-<p>The test run may take some time to execute (up to 10 minutes). So, it&#39;s a good time to take a short break. Check back in 5.</p>
-<div style="padding-left: 20px;"> <iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/SEXXES5v59o?rel=0" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe> </div>
+<p>In Visual Studio, add a new .NET Core 2.2 Web API Project to the existing solution.</p>
+<p>Choose the <em>ASP.NET Core Web Application</em> project type from the <em>Add New Project</em> window:</p>
+<p><img src="images/chapter4/select-project.png" class="img-override" /></p>
+<p>Name the project <em>ContosoUniversityAPI</em>:</p>
+<p><img src="images/chapter4/name-project.png" class="img-medium" /></p>
+<p>For the project type, ensure you&#39;ve selected <em>ASP.NET Core 2.2</em> and <em>API</em>. Click <em>Create</em>:</p>
+<p><img src="images/chapter4/project-type.png" class="img-override" /></p>
+<h4 id="adding-the-key-vault-components-to-the-api">Adding the Key Vault components to the API</h4>
+<p>Next, you&#39;ll have to back-track a bit and complete the same steps from the previous chapter related to the Key Vault components, but doing so for the Web API project. </p>
+<p>I&#39;m not going to detail these steps for you here, because you can look. But I will give you the high-levle beats of what you&#39;ll be doing. Feel free to use this list as a TODO checklist:</p>
+<ol>
+<li>Copy the contents of the app configuration file into the API&#39;s config file </li>
+<li>Add Key Vault related NuGet Packages </li>
+<li>Add a reference to the ContosoUniversityData project</li>
+<li>Add the <em>PrefixKeyVaultSecretManager</em> class (be sure to change the namespace if you&#39;re copy/pasting the actual file)</li>
+<li>Update <em>Program.cs</em> to add Key Vault configuration to the API project</li>
+</ol>
+<h4 id="configuring-entity-framework">Configuring Entity Framework</h4>
+<p>In addition to these steps, you&#39;ll also need to configure the Entity Framework School DbContext class for the API project.</p>
+<p>Copy the contents of the <em>Program.cs Main()</em> function, and move it into the API project&#39;s <em>Program.cs</em> file.</p>
+<p>Finally, replace the <em>Configuration()</em> function in <em>Startup.cs</em> with the following:</p>
+<pre><code class="lang-c#">public void ConfigureServices(IServiceCollection services)
+{
+    services.AddDbContext&lt;SchoolContext&gt;(options =&gt;
+        options.UseSqlServer(Configuration.GetConnectionString(&quot;DefaultConnection&quot;)));
 
-<p>Hi, welcome back. I wish you had just won $1700. Will you settle for a lousy accuracy test?</p>
-<p>So, let&#39;s check back in on the accuracy test.</p>
-<p><img src="images/chapter4/test4.png" class="img-override" /></p>
-<p>Ugh! 45% word error rate - not good.</p>
-<blockquote>
-<p><strong>Word Error Rate (WER)</strong></p>
-<p>&#39;WER&#39; (Word Error Rate) and &#39;Word Accuracy&#39; are the best measurements to take when comparing two utterances, these are typically values in % and are derived by comparing a reference transcript with the speech-to-text generated transcript (or hypothesis) for the audio. In our case, the reference transcript is the transcript file we supplied for the testing data set, and the speech-to-text generated transcript (or hypothesis) is what the CSS generated when it processed the 6 audio files in the testing dataset.</p>
-<p>The algorithm used is called the Levenshtein distance, it is calculated by aligning the reference with hypothesis and counting the words that are Insertions, Deletions, and Substitutions. </p>
-<p>In general, WER is fairly complex to calculate. We won&#39;t dive much deeper, but if you&#39;re interested in learning more, check out <a href="http://blog.voicebase.com/how-to-compare-speech-engine-accuracy">this website</a>. </p>
-</blockquote>
-<p>Well, 45% error rate is still pretty high. Let&#39;s explore the results of the accuracy test.</p>
-<p>Click the <em>Details</em> link to learn more. At the bottom of the page, you&#39;ll find the detailed transcription (we provided that) and the hypothesis (decoder output).</p>
-<p><img src="images/chapter4/test5.png" class="img-override" /></p>
-<p>You should notice several mis-interpretations, as the CSS had trouble with:</p>
-<ul>
-<li>Pikachu</li>
-<li>Meowth</li>
-<li>Jigglypuff</li>
-<li>Wink at me</li>
-</ul>
-<p>What&#39;s interesting is that aside from the Pokemon names, the CSS did a pretty good job. It got confused a bit about winking, but perhaps I didn&#39;t annunciate very well in the test files. We&#39;ll see later on.</p>
-<p>Another thing to note is our testing data set is <em>SMALL</em>. Really small. In fact, there are only ~30 words in the entire data set. That&#39;s really too small, and for each word missed, we add ~3% word error rate. In a production system, we&#39;d want hundreds of utterances, and thousands of words in a testing data set. So, keep that in mind for future endeavors.</p>
+    services
+        .AddMvc()
+        .SetCompatibilityVersion(CompatibilityVersion.Version_2_2)
+        .AddJsonOptions(
+            options =&gt; options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore
+        );
+}
+</code></pre>
+<p>These code changes register the School DbContext class and ensure JSON data returned by REST API is complete.</p>
+<h4 id="testing-your-changes">Testing your changes</h4>
+<p>Run the API project to test it. The Values Controller should return static values in a browser window:</p>
+<p><img src="images/chapter4/values.png" /></p>
 <p>This concludes the exercise. </p>
 <div class="exercise-end"></div>  
 
-<p>I know we can do better then 45%, and we will as we build our own acoustic and language models. </p>
-<h3 id="acoustic-models">Acoustic Models</h3>
-<p>Let&#39;s get started building an acoustic model based on our acoustic data set we uploaded earlier.</p>
+<h3 id="moving-web-controller-data-access">Moving Web Controller Data Access</h3>
+<p>Next, we&#39;ll be moving select data access logic from the Student and Courses controllers into Student and Courses controllers in the API project. Let&#39;s get started.</p>
 <h4 class="exercise-start">
-    <b>Exercise</b>: Training an acoustic model
+    <b>Exercise</b>: REST API Controller Creation and Moving Data Access Logic
 </h4>
 
-<p>Start by navigating to the CSS web portal at <a href="https://cris.ai" target="_blank">https://cris.ai</a>, and navigate to <em>Acoustic Models</em>. </p>
-<p><img src="images/chapter4/acoustic-model1.png" class="img-override" /></p>
-<p>This page shows the various acoustic models you&#39;ve trained for the CSS.</p>
-<p>Click the <em>Create New</em> button and complete the following fields:</p>
-<ul>
-<li>Locale: en-US</li>
-<li>Name: Pokemon - Acoustic Model</li>
-<li>Description: <em>blank</em></li>
-<li>Base Acoustic Model: Microsoft Search and Diction Model</li>
-<li>Acoustic Data: Pokemon - Acoustic Data - Training</li>
-<li>Subscription: <em>your subscription</em></li>
-<li>Accuracy Testing: <em>unchecked</em>, b/c we&#39;ve already run a test</li>
-</ul>
-<p><img src="images/chapter4/acoustic-model2.png" class="img-override" /></p>
-<p>Click <em>Create</em> to train the model.</p>
-<p>When the model is saved, you&#39;ll navigate back to the <em>Acoustic Models</em> page:</p>
-<p><img src="images/chapter4/acoustic-model3.png" class="img-override" /></p>
-<p>Note the <em>Status</em> of the test run is <em>NotStarted</em>. In a few moments, it will change to <em>Running</em>, then <em>Succeeded</em>.</p>
-<p>The test run may take some time to execute (up to 10 minutes). So, it&#39;s a good time to take a short break. Check back in another 10.</p>
-<div style="padding-left: 20px;"> <iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/25ShHY0LMpE?rel=0" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe> </div>
+<blockquote>
+<p><strong>You may have noticed...</strong></p>
+<p>...there&#39;s a lot of data access logic in the Web controllers. I&#39;m not walking you through moving every controller action. Instead, we&#39;ll be moving 2 controller actions, and I&#39;ll leave the others up to you. Think of it as a challenge (and practice for doing this IRL).</p>
+</blockquote>
+<h4 id="api-project-values-controller">API Project - Values Controller</h4>
+<p>Now that we know the API project runs, delete the Values controller - it&#39;s not needed.</p>
+<h4 id="api-project-courses-controller">API Project - Courses Controller</h4>
+<p>Let&#39;s start with the Courses controller. Create a Courses controller in the API project, then add the code below.</p>
+<pre><code class="lang-c#">using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using ContosoUniversityData.Data;
+using ContosoUniversityData.Models;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
-<p>Hi, welcome back. My son <em>loves</em> these videos. </p>
-<p>So, let&#39;s check back in on the model training:</p>
-<p><img src="images/chapter4/acoustic-model4.png" class="img-override" /></p>
-<p>Excellent, it&#39;s finished.</p>
+namespace ContosoUniversityAPI.Controllers
+{
+    [Route(&quot;api/[controller]&quot;)]
+    [ApiController]
+    public class CoursesController : ControllerBase
+    {
+        private readonly SchoolContext _context;
+
+        public CoursesController(SchoolContext context)
+        {
+            _context = context;
+        }
+
+        // GET: api/Courses
+        [HttpGet]
+        public IEnumerable&lt;Course&gt; Get()
+        {
+            var courses = _context.Courses
+                .Include(c =&gt; c.Department)
+                .AsNoTracking();
+            return courses.ToList();
+        }
+    }
+}
+</code></pre>
+<h4 id="api-project-students-controller">API Project - Students Controller</h4>
+<p>Now, add a Students controller and the following code:</p>
+<pre><code class="lang-c#">using System.Net;
+using System.Threading.Tasks;
+using ContosoUniversityData.Data;
+using ContosoUniversityData.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace ContosoUniversityApi.Controllers
+{
+    [Route(&quot;api/[controller]&quot;)]
+    [ApiController]
+    public class StudentsController : ControllerBase
+    {
+        private readonly SchoolContext _context;
+
+        public StudentsController(SchoolContext context)
+        {
+            _context = context;
+        }
+
+        // POST: api/Students
+        [HttpPost]
+        public async Task&lt;StatusCodeResult&gt; Post([FromBody] Student student)
+        {
+            try
+            {
+                _context.Add(student);
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException /* ex */)
+            {
+                return new StatusCodeResult((int)HttpStatusCode.BadRequest);
+            }
+            return new StatusCodeResult((int)HttpStatusCode.Created);
+        }
+
+    }
+}
+</code></pre>
+<h4 id="testing-your-changes">Testing your changes</h4>
+<p>Finally, open the <em>launchSettings.json</em> file and modify the <em>launchUrl</em> value to be <em>api/Courses</em> in al places. Note - you will need to change it in 2 places.</p>
+<p><img src="images/chapter4/launch-settings.png" class="img-small" /></p>
+<p>As you can see, we added the HTTP GET for courses and HTTP POST for students. Run the API project to test your changes. You shoud see a list of Courses, returned as JSON:</p>
+<p><img src="images/chapter4/courses.png" class="img-override" /></p>
 <p>This concludes the exercise. </p>
 <div class="exercise-end"></div>  
 
