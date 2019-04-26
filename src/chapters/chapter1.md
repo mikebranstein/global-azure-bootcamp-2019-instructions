@@ -20,14 +20,14 @@ One of the most important aspects of your Azure subscription and using the Azure
 Our first stop will be to create a new Dashboard to organize our Azure resources we're building today.
 
 <h4 class="exercise-start">
-    <b>Exercise</b>: Create a Dashboard and Resource Group
+    <b>Exercise</b>: Create a Dashboard
 </h4>
 
 #### Creating a Dashboard
 
 We'll start by creating a dashboard. 
 
-Login to the Azure portal, click *+ New Dashboard*, give the dashboard name, and click *Done customizing*.
+Login to the Azure portal, click *+*, give the dashboard name, and click *Done customizing*.
 
 <img src="images/chapter1/new-dashboard.gif" class="img-medium" />
 
@@ -41,7 +41,7 @@ Now that you have a new dashboard, let's put something on it. We'll be searching
 >
 > You'll recall from the last chapter that resource groups provide a way to monitor, control access, provision and manage billing for collections of assets that are required to run an application, or used by a client or company department. Informally, think of resource groups like a file system folder, but instead of holding files and other folders, resource groups hold azure objects like storage accounts, web apps, functions, etc.
 
-Start by searching for the resource group you created in chapter 0. My resource group was called *workshop-test7*. 
+Start by searching for the resource group you created in chapter 0. My resource group was called *workshop-rg*. 
 
 <img src="images/chapter1/find-resource-group.gif" class="img-override" />
 
@@ -53,43 +53,14 @@ This opens the resource group. Next, click the *pin* icon at the upper-right to 
 
 Finally, close the resource group, by clicking the *X* in the upper right corner (next to the *pin* icon). You should see the resource group pinned to your dashboard:
 
-<img src="images/chapter1/pinned.png" class="img-override" />
+<img src="images/chapter1/pinned.png" class="img-medium" />
 
 Now that you have the VM's resource group pinned to your dashboard, it will be easy to locate the VM in later exercises.
 
-#### Creating a Resource Group
+Go ahead and click ont he Virtual machine, then pin it to the dashboard. When you're finished, you should see something like this:
 
-Our last step will be to create a new Resource Group to house the non-VM resources we'll create in this workshop. 
+<img src="images/chapter1/vm-pin.gif" class="img-medium" />
 
-Start by clicking the *+ Create a resource* button on the left.
-
-<img src="images/chapter1/new.png" class="img-override" />
-
-Search for resource group by using the search box, selecting *Resource Group* when it appears.
-
-<img src="images/chapter1/new-resource.png" class="img-medium" />
-
-Select *Resource Group* from the search results window:
-
-<img src="images/chapter1/resource-group-results.png" class="img-medium" />
-
-Click *Create* at the bottom:
-
-<img src="images/chapter1/create-resource-group.png" class="img-medium" />
-
-Give the Resource group a name, select your Azure subscription, and a location. Press *Create* when you're finished.
-
-<img src="images/chapter1/create-resource-group-2.png" class="img-override" />
-
-After it's created, you'll see a message in the notification area:
-
-<img src="images/chapter1/resource-group-created.png" class="img-override" />
-
-Pin it to your dashboard by clicking the *Pin to dashboard* button. Note that the resource group has been added to your dashboard.
-
-<img src="images/chapter1/resource-group-dashboard.png" class="img-override" />
-
-<div class="exercise-end"></div>
 
 That wraps up the basics of creating dashboard, creating resource groups, and pinning resources to a dashboard. We're not going to take a deep dive into Azure Resource Group. If you're interested in learning more, check out this [article](https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-group-portal).
 
@@ -110,11 +81,15 @@ Locate the VM resource group you pinned earlier in this chapter and click on you
 
 Click the *Connect* button.
 
-<img src="images/chapter1/connect.png" class="img-override" />
+<img src="images/chapter1/connect.png"/>
+
+This displays a download window on the right. Press the *Download RDP file* button.
+
+<img src="images/chapter1/connect-download.png" />
 
 This downloads a file to your computer that will open in your Remote Desktop program.
 
-<img src="images/chapter1/connect-download.png" class="img-override" />
+<img src="images/chapter1/connect-download-2.png" />
 
 Click the downloaded file to open a connection to your VM. Enter your username and password you created earlier. 
 
@@ -132,18 +107,6 @@ You're now connected to your VM.
 >
 > If you're like me, you have a standard toolset you like to use. Please, download software for your VM and don't forget your browser of choice, Notepad++, Visual Studio Code, etc.
 
-#### Get a real browser!
-
-> **Download Chrome/Firefox/Edge**
->
-> It's important that you download an evergreen browser on your virtual machine, because the version of Internet Explorer installed on the VM is not compatible with some of the JavaScript we have in this workshop.  
-
-Before you can download files through Internet Explorer, you need to enable downloads. Go to Tools -> Internet Options -> Security -> Internet -> Custom Level. Find Downloads -> File download, then select Enabled. Close Internet Explorer, then re-open.
-
-<img src="images/chapter1/enable-downloads.gif" class="img-override" />
-
-Now, you can download your favorite browser. And don't forget to set it as your default. Don't use IE.
-
 This concludes the exercise.
 
 <div class="exercise-end"></div>
@@ -152,7 +115,7 @@ Now that you're connected to your VM, you can continue to workshop from inside t
 
 > **Running a VM in Azure** 
 >
-> If you're worried about excessive charges to your Azure subscription because you're running a VM constantly, don't worry. This VM is programmed to shut itself down every morning at 1:00 AM. 
+> If you're worried about excessive charges to your Azure subscription because you're running a VM constantly, don't worry. This VM is programmed to shut itself down every evening at 7:00 PM EST. 
 
 ### Clone project from master branch
 
@@ -162,9 +125,9 @@ Let's get started by getting the `master` branch.
     <b>Exercise</b>: Getting the bootcamp files
 </h4>
 
-Clone or download the `master` branch from [https://github.com/mikebranstein/global-azure-bootcamp-2018](https://github.com/mikebranstein/global-azure-bootcamp-2018).
+Clone or download the `master` branch from [https://github.com/mikebranstein/global-azure-bootcamp-2019](https://github.com/mikebranstein/global-azure-bootcamp-2019).
 
-Use this [link](https://github.com/mikebranstein/global-azure-bootcamp-2018/archive/master.zip) to download a zip file of the `master` branch.
+Use this [link](https://github.com/mikebranstein/global-azure-bootcamp-2019/archive/master.zip) to download a zip file of the `master` branch.
 
 <img src="images/chapter1/downloaded-zip.png" class="img-override" />
 
@@ -174,7 +137,7 @@ Use this [link](https://github.com/mikebranstein/global-azure-bootcamp-2018/arch
 
 If you're running Windows, right-click the zip file and go to the properties option. Check the *Unblock* option, press *Apply*, press *Ok*.
 
-<img src="images/chapter1/unblock.gif" class="img-override" />
+<img src="images/chapter1/unblock.gif" />
 
 Now it's safe to unzip the file. 
 
@@ -186,9 +149,27 @@ Now it's safe to unzip the file.
     <b>Exercise</b>: Compiling the solution
 </h4>
 
-Open the solution in Visual Studio by double-clicking the `Web.sln` file in the *web* folder of the extracted files:
+Before we can compile the solution, we need ot ensure .NET Core 2.2 is installed on your virtual machine.
 
-<img src="images/chapter1/solution-file.png" class="img-override" />
+Locate and run *Visual Studio Installer* from the Start Menu:
+
+<img src="images/chapter1/vs-installer.png" />
+
+Select the *Modify* option under Visual Studio 2019:
+
+<img src="images/chapter1/modify.png" />
+
+On the right, expand the section labeled *.NET Core cross-platform development*, and check the box labeled *.NET Core 2.2 development tools*.
+
+<img src="images/chapter1/core-22.png" />
+
+Click the *Modify* button on the bottom to install. The install takes approx. 5 minutes to complete.
+
+When the install is finished, you can update Visual Studio 2019 to the latest version (if you want), but it isn't necessary.
+
+Next, open the solution in **Visual Studio 2019** by double-clicking the `ContosoUniversity.sln` file in the *src* folder of the extracted files:
+
+<img src="images/chapter1/solution-file.png" />
 
 > **Logging into Visual Studio the first time**
 >
@@ -196,11 +177,11 @@ Open the solution in Visual Studio by double-clicking the `Web.sln` file in the 
 
 The opened solution should look like this:
 
-<img src="images/chapter1/opened-solution.png" class="img-override" />
+<img src="images/chapter1/opened-solution.png" />
 
 Build and debug the solution. You should see the Speech Recognition site load in your browser.
 
-<img src="images/chapter1/site.png" class="img-override" />
+<img src="images/chapter1/site.png" />
 
 This concludes the exercise.
 
@@ -242,15 +223,15 @@ Earlier in this chapter, you created a resource group to house resources for thi
     <b>Exercise</b>: Deploying to a Web App from Visual Studio 2017
 </h4>
 
-> **Visual Studio 2017 Warning** 
+> **Visual Studio 2019 Warning** 
 >
-> This exercise assumes you're running Visual Studio 2017. The UI and screens in Visual Studio 2015 aren't the same, but similar. We're not going to include screen shots for 2015, but we think you can figure it out.
+> This exercise assumes you're running Visual Studio 2019. If you're not, please do.
 
-From Visual Studio, right-click the *Web* project and select *Publish*. In the web publish window, select *Microsoft Azure App Service*, *Create New*, and press *Publish*. This short clip walks you through the process:
+From Visual Studio, right-click the *ContosoUniversity* project and select *Publish*. In the web publish window, select *Microsoft Azure App Service*, *Create New*, and press *Publish*. This short clip walks you through the process:
 
 <img src="images/chapter1/publish-web-app.gif" class="img-large" />
 
-On the next page, give your Web App a name, select your Azure subscription, and select the Resource Group you created earlier (mine was named *workshop*).
+On the next page, give your Web App a name, select your Azure subscription, and select the Resource Group you created earlier (mine was named *workshop-rg*), and create a new Free App Service Plan. Read below for more details.
 
 > **Unique Web App Names**
 >
@@ -266,7 +247,7 @@ Click *New...* to create a new Web App plan.
 
 Create a new free plan.
 
-<img src="images/chapter1/new-plan.png" class="img-override" />
+<img src="images/chapter1/new-plan.png" />
 
 After the plan is created, click *Create* to create the Web App in Azure.
 

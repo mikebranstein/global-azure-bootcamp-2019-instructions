@@ -206,12 +206,17 @@ When the page loads, you'll see this custom deployment page:
 #### Under *Basics*, select/enter the following
 - Subscription: *your Azure subscription*
 - Resource group: *Create new*
-- Resource group name: *workshop*, or some other name that's easy to remember
+- Resource group name: *workshop-rg*, or some other name that's easy to remember
 - Location: *East US*
 
 > **Resource Groups** 
 >
 > Formally, resource groups provide a way to monitor, control access, provision and manage billing for collections of assets that are required to run an application, or used by a client or company department. Informally, think of resource groups like a file system folder, but instead of holding files and other folders, resource groups hold azure objects like storage accounts, web apps, functions, etc.
+
+> **Naming Resource Groups** 
+>
+> I like to name my resource groups after their purpose, and append them with *-rg*, which signifies they are a resource group. 
+
 
 #### Under *Settings*, enter
 - Virtual Machine Name: *workshop-vm*, or some other name that is less than 15 characters long, and no special characters
