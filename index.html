@@ -1352,6 +1352,109 @@ public void Configure(IApplicationBuilder app, IHostingEnvironment env)
 
 			</div>
 			<hr>
+			<div class="chapter">
+				<h2 id="consuming-a-secure-rest-api">Consuming a Secure REST API</h2>
+<p>In this chapter, you&#39;ll learn:</p>
+<ul>
+<li>How to modify your Web project to communicate to a backend API via APIM</li>
+</ul>
+<h3 id="overview">Overview</h3>
+<p>In the last chapter, you deployed a secure API using API Management, then restricted access to your REST API so only API Management could communicate with it. </p>
+<p>This is fantastic! But...now the Contoso University web app you deployed cannot talk to the backend API directly.</p>
+<p>In this chapte,r we&#39;ll refactor the REST API access code slightly to communicate to the backend API via the APIM gateway.</p>
+<h3 id="refactoring-rest-api-access">Refactoring REST API Access</h3>
+<p>To communicate through the APIM gateway, you&#39;ll need to update the code in the Contoso University web app. Let&#39;s get started!</p>
+<h4 class="exercise-start">
+    <b>Exercise</b>: Update the web app
+</h4>
+
+<p>There are a number of steps you&#39;ll need to accomplish to ensure the deployed Contoso University web app can speak through the APIM gateway:</p>
+<ol>
+<li>Update Key Vault with new Api:BaseAddress, Api:SubscriptionKey, and Api:ApiPath values</li>
+<li>Add a blank Api:SubscriptionKey key/value pair to the app configuration file</li>
+<li>Refactor the httpClient code to pass the <em>Ocp-Apim-Subscription-Key</em> header with each request</li>
+</ol>
+<h4 id="updating-key-vault-secrets">Updating Key Vault secrets</h4>
+<p>Navigate to the Key Vault you deployed earlier, and add/update the following keys with their new values:</p>
+<ul>
+<li>Api--BaseAddress: change this to the URL of your API Management gateway, mine was <a href="https://contoso-university-meb.azure-api.net">https://contoso-university-meb.azure-api.net</a></li>
+<li>Api--ApiPath: /contoso/v1</li>
+<li>Api--SubscriptionKey: the subscription key you copied from the Developer portal in the previous chapter</li>
+</ul>
+<h4 id="add-a-black-api-subscriptionkey-key-value-pair">Add a black Api:SubscriptionKey key/value pair</h4>
+<p>Open the web project&#39;s configuration file and add a &quot;SubscriptionKey&quot;: &quot;&quot; key/value pair to the &quot;Api&quot; section. It should now look like:</p>
+<pre><code class="lang-json">&quot;Api&quot;: {
+    &quot;BaseAddress&quot;: &quot;https://localhost:XXXXX&quot;,
+    &quot;SubscriptionKey&quot;: &quot;&quot;,
+    &quot;ApiPath&quot;: &quot;&quot;
+}
+</code></pre>
+<h4 id="refactor-controllers-to-include-the-ocp-apim-subscription-key-http-header">Refactor controllers to include the Ocp-Apim-Subscription-Key HTTP header</h4>
+<p>Open the Students contoller and update the Create() function to:</p>
+<pre><code class="lang-c#">// more details see http://go.microsoft.com/fwlink/?LinkId=317598.
+[HttpPost]
+[ValidateAntiForgeryToken]
+public async Task&lt;IActionResult&gt; Create(
+    [Bind(&quot;EnrollmentDate,FirstMidName,LastName&quot;)] Student student)
+{
+    if (ModelState.IsValid)
+    {
+        using (var httpClient = new HttpClient())
+        {
+            try
+            {
+                httpClient.BaseAddress = new Uri(_configuration[&quot;Api:BaseAddress&quot;]);
+                httpClient.DefaultRequestHeaders.Add(&quot;Ocp-Apim-Subscription-Key&quot;, _configuration[&quot;Api:SubscriptionKey&quot;]);
+                var response = await httpClient.PostAsJsonAsync&lt;Student&gt;($&quot;{_configuration[&quot;Api:ApiPath&quot;]}/api/Students&quot;, student);
+                response.EnsureSuccessStatusCode();
+                return RedirectToAction(nameof(Index));
+            }
+            catch (HttpRequestException httpRequestException)
+            {
+                //Log the error (uncomment ex variable name and write a log.
+                ModelState.AddModelError(&quot;&quot;, &quot;Unable to save changes. &quot; +
+                    &quot;Try again, and if the problem persists &quot; +
+                    &quot;see your system administrator.&quot;);
+            }
+        }
+    }
+    return View(student);
+}
+</code></pre>
+<p>Then, open the Courses controller and update it&#39;s Index() method to:</p>
+<pre><code class="lang-c#">// GET: Courses
+public async Task&lt;IActionResult&gt; Index()
+{
+    using (var httpClient = new HttpClient())
+    {
+        try
+        {
+            httpClient.BaseAddress = new Uri(_configuration[&quot;Api:BaseAddress&quot;]);
+            httpClient.DefaultRequestHeaders.Add(&quot;Ocp-Apim-Subscription-Key&quot;, _configuration[&quot;Api:SubscriptionKey&quot;]);
+            var response = await httpClient.GetAsync($&quot;{_configuration[&quot;Api:ApiPath&quot;]}/api/Courses&quot;);
+            response.EnsureSuccessStatusCode();
+
+            var stringResult = await response.Content.ReadAsStringAsync();
+
+            var courses = JsonConvert.DeserializeObject&lt;IEnumerable&lt;Course&gt;&gt;(stringResult);
+            return View(courses);
+        }
+        catch (HttpRequestException httpRequestException)
+        {
+            return BadRequest($&quot;Error getting request: {httpRequestException.Message}&quot;);
+        }
+    }
+}
+</code></pre>
+<h4 id="testing-your-changes">Testing your changes</h4>
+<p>Redeploy the ContosoUniversity web app to Azure and visit the site to make sure it still works.</p>
+<p>This concludes the exercise. </p>
+<div class="exercise-end"></div>
+
+<p>Congratulations! You&#39;ve successfully secured your API and accessed it from another application. </p>
+
+			</div>
+			<hr>
 			<br />
 			<br />
 			<br />
