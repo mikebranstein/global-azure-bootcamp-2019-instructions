@@ -765,6 +765,6 @@ At the beginning of this chapter, we outlined a multi-step process to creating a
 4. A Web API project with REST API endpoint to retrieve the aggregate demographic data.
 5. An API Management API that exposes the new REST API service for other universities to access.
 
-With what you've learned in this workshop, I feel confident you should be able to complete #4 and #5 on your own. The workshop isn't over, and I'll be around to help out when needed.
+With what you've learned in this workshop, I feel confident you should be able to complete #4 and #5 on your own. The workshop isn't over, and I'll be around to help out when needed or if you get stuck.
 
 Good luck!
