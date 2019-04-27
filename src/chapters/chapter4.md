@@ -474,7 +474,6 @@ I won't walk you through the details, but will outline the high-level steps and 
 
 Navigate to the Secrets area of your Key Vault and add the following key/value pairs:
 - Api--BaseAddress: the URL of the new API web app, mine was https://contoso-web-api-meb.azurewebsites.net
-- Api--ApiPath: {empty string, for now}
 
 Note: now that you've added these values, you may need to restart the API web app again to have it read the updated values.
 
