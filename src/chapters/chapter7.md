@@ -1,263 +1,770 @@
-## Building a LUIS App
+## Building for the API Economy
 
 In this chapter, you'll learn:
-- how to build intents
-- how to create entities and map them to intent phrases
-- how phrase lists can help increase accuracy
+- How to use ASP.NET Core action filters to capture data change events 
+- How to create an Event Hub and popoulate it with messages when data changes
+- How to respond to Event Hub messages with an Azure function
 
 ### Overview
 
-In the last chapter you learned about the basics of LUIS: intents, utterances, entities. You also learned how we'll be using LUIS and how it will integrate into our speech-to-text pipeline.
+You've completed our mission of creating secure, reusable REST APIs. But what if you want to share your data with an external audience. You've learned that API Management can help you share your APIs, but should an external audience hav access to the same data as your internal devleopment teams?
 
-I don't want to delay us too much, so let's dive right in by creating your first LUIS app.
+Definitely not.
 
-### Creating a LUIS app
+In the last several chapters, we'll be endeavoring to build an external data mart accesible by another REST API hosted via APIM. This effort is part of a multi-university data-sharing program where you have agreed to share aggregate course, department, and student performance. 
+
+A key aspect to this type of data mart is that it's use does not affect the use of your internal APIs. For example:
+1. If the external API has a large amount of traffic, it should not affect the internal API availability
+2. If there were a breach of the external API, there should be no access to the same data accessible from the internal API (i.e., Student names, PII, etc.)
+
+To accomplish these goals, you'll be designing a system composed of 5 additional Azure resources:
+1. Event Hub that receives a message when data is updated in the internal ContosoUniversity3 database
+2. An Azure Function that listens for Event Hub messages and rebuilds/aggregates the course, department, and student performance data.
+3. A Cosmos DB instance that will house the aggregate data in an efficient JSON data structure.
+4. A Web API project with REST API endpoint to retrieve the aggregate demographic data.
+5. An API Management API that exposes the new REST API service for other universities to access.
+
+We have a lot to build over the next several chapter, so let's get started.
+
+### Provisioning the Azure Resources
 
 <h4 class="exercise-start">
-    <b>Exercise</b>: Creating a LUIS App
+    <b>Exercise</b>: Create the necessary resources
 </h4>
 
-Log in to the LUIS portal at [https://www.luis.ai](https://www.luis.ai), and navigate to the *My Apps* area:
+We'll provision all of the Azure resources at once. 
 
-<img src="images/chapter7/luis1.png" class="img-override" />
+#### Event Hub
 
-This page lists the various LUIS apps you have created.
+Create an Event Hub with the following settings (be sure to use your own unique name):
 
-Click the *Create new app* button. Name it *Pokemon*:
+<img src="images/chapter7/eh-create.png" />
 
-<img src="images/chapter7/luis2.png" class="img-override" />
+Creating the Event Hub actually creates an Event Hub Namespace. When it's finished deploying, navigate to it and create an Event Hub named *dataupdated*:
 
-After creating the app, you'll be redirected to the *Intent* page automatically:
+<img src="images/chapter7/eh-dataupdated.png" />
 
-<img src="images/chapter7/luis3.png" class="img-override" />
+Next, navigate to the *Shared access policies* section, click on *RootManageSharedAccessPolicy* and copy the *Primary key* and *Connection string primary key* values:
 
-There's not much more to creating the initial LUIS app, so let's continue on with defining your app intents.
+<img src="images/chapter7/eh-sap.png" class="img-medium" />
+
+Save these values for later.
+
+#### Function App
+
+Create a Function App with the following settings (be sure to use your own unique name for the function app and the storage account):
+
+<img src="images/chapter7/func-create.png" />
+
+#### Cosmos Db
+
+Create a Cosmos Db with the following settings (be sure to use your own unique name):
+
+<img src="images/chapter7/cosmos-create.png" />
+
+#### Web App for External API
+
+Create a Web App with the following settings to host the external Web API project (be sure to use your own unique name):
+
+<img src="images/chapter7/web-app-create.png" />
 
 This concludes the exercise. 
 
 <div class="exercise-end"></div>
 
-### Creating Intents
+### Triggering Data Updated Messages with Action Filters
 
-You'll recall that LUIS intents are represent actions the user wants to perform. The intent is a purpose or goal expressed in a user's input, such as booking a flight, paying a bill, or finding a news article. In our case, we'll be creating intents like sitting down, scratching, jumping, etc.
+Now that our Azure resources are created, let's return to our code. The goal is to write a message to the Event Hub each time data is changed in our database, so that an Azure Function App (which is listening for messages on the Event Hub) can aggregate our internal data and write it to a Cosmos Db.
+
+The best time to write a message on to the Event Hub is immediatly after data has been updated in the SQL database, which occurs in our central Web API REST service. But, it feels sloppy to add a bunch of code to every method that updates data. 
+
+Instead, it's better to create a decoupled process that can augment the Web API controller actions. Luckily, this si the exact purpose of Action Filters.
+
+There are several types of ASP.NET Core action filters, but we're really only concerned with one that will run code after controller actions succeed. 
+
+So, if we do this the right way and put the Event Hub message logic in an action filter, we can annotate any controller action that updates SQL data with the filter. And viola! Decoupled design where we have a very low risk of affecting the code within our existing REST API methods. 
 
 <h4 class="exercise-start">
-    <b>Exercise</b>: Creating LUIS intents
+    <b>Exercise</b>: Creating an ASP.NET Core Action Filter
 </h4>
 
-Log in to the LUIS portal at [https://www.luis.ai](https://www.luis.ai), and navigate to the *Intents* area by first navigating to the *My Apps* areas, drilling down into the *Pokemon* app:
+Create a new .NET Core Class Library named ContosoUniversityInfra in your solution. It will store shared Event Hub message data types that can be access by the API project and a Function App project (to be provisioned in a latter chapter).
 
-<img src="images/chapter7/luis3.png" class="img-override" />
+<img src="images/chapter7/infra.png" />
 
-This page lists the various intents you have created. You'll notice that a *None* intent was automatically created for you. All LUIS apps start with this intent - you *should not* delete it. The *None* intent is used as a default fall-back intent for your LUIS apps. 
+Add the following NuGet packages (being careful to use the exact versions specified):
+- Newtonsoft.Json, v11.0.2
 
-#### Finding the intents
+Remove the `Class1.cs` file.
 
-You'll be creating a variety of intents in the *Pokemon* app. To help you, we've already defined the intents for you. In the code you downloaded from Github, locate the *language-understanding-data* folder. It contains a file named *luis-utterances.md*:
+Create a *Models* folder and add 2 classes: *CourseAggregateDto* and *DemographicsDto*. These classes will hold the aggregate course, department, and student performance demographic data that is stored in Cosmos Db.
 
-<img src="images/chapter7/luis4.png" class="img-override" />
+Use the following code snippets to build out each class.
 
-Inside the markdown file, you'll find an intent followed by a series of utterances. For example:
+#### CourseAggregateDto
 
+```c#
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace ContosoUniversityInfra.Models
+{
+    public class CourseAggregateDto
+    {
+        [JsonProperty(PropertyName = "courseId")]
+        public int CourseId { get; set; }
+
+        [JsonProperty(PropertyName = "courseName")]
+        public string CourseName { get; set; }
+
+        [JsonProperty(PropertyName = "departmentId")]
+        public int DepartmentId { get; set; }
+
+        [JsonProperty(PropertyName = "departmentName")]
+        public string DepartmentName { get; set; }
+
+        [JsonProperty(PropertyName = "enrollmentCount")]
+        public int EnrollmentCount { get; set; }
+
+        [JsonProperty(PropertyName = "gradeACount")]
+        public int GradeACount { get; set; }
+
+        [JsonProperty(PropertyName = "gradeBCount")]
+        public int GradeBCount { get; set; }
+
+        [JsonProperty(PropertyName = "gradeCCount")]
+        public int GradeCCount { get; set; }
+
+        [JsonProperty(PropertyName = "gradeDCount")]
+        public int GradeDCount { get; set; }
+
+        [JsonProperty(PropertyName = "gradeFCount")]
+        public int GradeFCount { get; set; }
+
+        [JsonProperty(PropertyName = "gradeOtherCount")]
+        public int GradeOtherCount { get; set; }
+    }
+}
 ```
-# Sit
-- ash's best friend should sit down
-- sit pikachu
-- sit on the floor pikachu
-- have a seat meowth
-- meowth please sit on the ground
+
+#### DemographicsDto.cs
+
+```c#
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace ContosoUniversityInfra.Models
+{
+    public class DemographicsDto
+    {
+        [JsonProperty(PropertyName = "id")]
+        public string Id { get; set; }
+
+        [JsonProperty(PropertyName = "schoolYear")]
+        public int SchoolYear { get; set; }
+
+        [JsonProperty(PropertyName = "courses")]
+        public List<CourseAggregateDto> Courses { get; set; }
+
+        public DemographicsDto(int schoolYear)
+        {
+            this.SchoolYear = schoolYear;
+            this.Courses = new List<CourseAggregateDto>();
+        }
+    }
+}
 ```
 
-In the snippet above, the heading `Sit` is the name of an intent you'll create, followed by utterances that align to the intent.
+#### Event Hub Message
 
-LUIS is like the Custom Speech Service, as it needs to *learn* the types of phrases (or utterances) that map to an intent. 
+Add a class named *DataUpdatedMessage* to the root of the project. Use the following code to complete the class:
 
-Referencing the *luis-utterances.md* file, create intents for each intent listed in the document.
+```c#
+using System;
 
-Follow along below to create the first intent, then rinse and repeat for the remaining intents.
+namespace ContosoUniversityInfra
+{
+    public class DataUpdatedMessage
+    {
+        public MessageType MessageType { get; set; }
+    }
 
-#### Adding an intent
+    public enum MessageType
+    {
+        None = 0,
+        Rebuild = 1
+    }
+}
+```
 
-To add an intent, click the *Create new intent* button:
+#### Create an Action Filter
 
-<img src="images/chapter7/luis5.png" class="img-override" />
+Add a few staple NuGet packages to the ContosoUniversityApi project (be mindful of the specific versions we're referencing):
+- Microsoft.Azure.EventHubs, v3.0.0
 
-Name the intent *Sit*, as referenced in the *luis-utterances.md* file:
+Add a reference to the ContosoUniversityInfra project.
 
-<img src="images/chapter7/luis6.png" class="img-override" />
+In the ContosoUniversityApi project, create a folder named *Filters* and add a class named *PublishDataUpdatedEventActionFilter* to the folder. Populate the class with the following code:
 
-On the next screen, the *Sit* intent will be listed at the top. In the text box below the intent, enter in the related utterances from the *luis-utterances.md* file. After each utterance, press *Enter* to save the utterance.
+```c#
+using ContosoUniversityInfra;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.Azure.EventHubs;
+using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
-<img src="images/chapter7/intent.gif" class="img-override" />
+namespace ContosoUniversityApi.Filters
+{
+    public class PublishDataUpdatedEventActionFilter : IActionFilter
+    {
+        private readonly IConfiguration _configuration;
 
-You'll notice that the LUIS portal associated the utterance with the intent each time you press *Enter*.
+        public PublishDataUpdatedEventActionFilter(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
 
-When you've finished entering the associated utterances, you can scroll down to review and modify them:
+        // runs after a controller action completed
+        public void OnActionExecuted(ActionExecutedContext context)
+        {
+            // construct a message to send on the event hub
+            var message = new DataUpdatedMessage() { MessageType = MessageType.Rebuild };
 
-<img src="images/chapter7/luis7.png" class="img-override" />
+            // send the message
+            SendMessageToEventHub(message, _configuration["EventHub:ConnectionString"])
+                .GetAwaiter()
+                .GetResult();
+        }
 
-You'll also notice each utterance has a drop down next to it allow you to re-associate it with a different intent, if you made a mistake.
+        public void OnActionExecuting(ActionExecutingContext context)
+        {
+            return; // do nothing 
+        }
 
-When you're finished entering the utterances for this intent, navigate back to the list of intents by clicking the *Intents* link on the left:
+        private static async Task SendMessageToEventHub(DataUpdatedMessage message, string eventHubConnectionString)
+        {
+            // Creates an EventHubsConnectionStringBuilder object from the connection string, and sets the EntityPath.
+            // Typically, the connection string should have the entity path in it, but this simple scenario
+            // uses the connection string from the namespace.
+            var connectionStringBuilder = new EventHubsConnectionStringBuilder(eventHubConnectionString)
+            {
+                EntityPath = "dataupdated"
+            };
 
-<img src="images/chapter7/luis8.png" class="img-override" />
+            var eventHubClient = EventHubClient.CreateFromConnectionString(connectionStringBuilder.ToString());
 
-#### Finish adding the remaining intents
+            await eventHubClient.SendAsync(new EventData(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message))));
+            await eventHubClient.CloseAsync();
+        }
+    }
+}
+```
 
-Proceed to add the remaining intents listed in the *luis-utterances.md* file. When you're finished, your list of intents should look like these:
+#### Update the App Configuration
 
-<img src="images/chapter7/luis9.png" class="img-override" />
+Next, open the API project configuration file and add a value for *EventHub:ConnectionString* that contains the Event Hub connection string you saved earlier in this chapter.
+
+```json
+  "EventHub": {
+    "ConnectionString": "{your event hub connection string here}"
+  }
+```
+
+After updating the configuration file, add the same value in the Azure Key Vault.
+
+> **Event Hubs and Development**
+>
+> Azure Event Hubs do not have a solution for developing locally, so you have to use a real Event Hub for local development. Usually, I would have a separate Event Hub I use for development and production work, but to same time in the workshop, we're using the same Event Hub. So, when you get back to work, do what I say, not what I do ;-)
+
+#### Register the Action Filter
+
+Before you can use the Action Filter you need to register it in the API project's startup process.
+
+Update the *ConfigureServices()* function in the Startup class with the following code:
+
+```c#
+// This method gets called by the runtime. Use this method to add services to the container.
+public void ConfigureServices(IServiceCollection services)
+{
+    services.AddDbContext<SchoolContext>(options =>
+        options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
+
+    services.AddScoped<PublishDataUpdatedEventActionFilter>();
+
+    services
+        .AddMvc()
+        .SetCompatibilityVersion(CompatibilityVersion.Version_2_2)
+        .AddJsonOptions(
+            options => options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore
+        );
+
+    // Register the Swagger generator, defining 1 or more Swagger documents
+    services.AddSwaggerGen(c =>
+    {
+        c.SwaggerDoc("v1", new OpenApiInfo { Title = "ContosoUniversity", Version = "v1" });
+    });
+}
+```
+
+You'll notice we added a line to register the *PublishDataUpdatedEventActionFilter* class.
+
+#### Applying the Action Filter
+
+The final step is to apply the action filter to any controller actions that update data. Because our solution is purposefully small, the only qualifying controller action is the Student contoller's *Create()* method. Update it with the followin code:
+
+```c#
+// POST: api/Students
+[HttpPost]
+[ServiceFilter(typeof(PublishDataUpdatedEventActionFilter))]
+public async Task<StatusCodeResult> Post([FromBody] Student student)
+{
+    try
+    {
+        _context.Add(student);
+        await _context.SaveChangesAsync();
+    }
+    catch (DbUpdateException /* ex */)
+    {
+        return new StatusCodeResult((int)HttpStatusCode.BadRequest);
+    }
+    return new StatusCodeResult((int)HttpStatusCode.Created);
+}
+```
+
+You'll notice the annotation applying the action filter.
+
+#### Testing the changes
+
+Publish the API project to Azure, open the Contoso University web app, and create a new Student.
+
+Wait approx 2-3 minutes, then navigate to the Event Hub Overview page in the Azure portal. Switch the metic type to *Messages* and look for a spike on the chart, indicating that a message was sent to the Event Hub when the student was created.
+
+<img src="images/chapter7/eh-message.png" class="img-override" />
 
 This concludes the exercise. 
 
 <div class="exercise-end"></div>
 
-### Adding Entities
+### Processing the Event Hub Message
 
-After adding intents to your LUIS app, it's time to add entities. As you'll recall, an entity represents detailed information that is relevant in an utterance. For example, in the utterance "Jigglypuff, stop singing", "Jigglypuff" is a Pokemon. By recognizing and labeling the entities that are mentioned in the user’s utterance, LUIS helps you choose the specific action to take to answer a user's request.
-
-#### Additional entity information
-
-There are a few important things about entities that are relevant, but we hadn't covered them yet. 
-
-First, entities are optional but highly recommended.
-
-While intents are required, entities are optional. You do not need to create entities for every concept in your app, but only for those required for the app to take action.
-
-For example, as you begin to develop a machine learning pipeline that integrates LUIS, you may not have a need to identify details/entities to act upon. So, when starting off, don't add them. Then, as your app matures, you can slowly add entities. 
-
-Second, entities are shared across intents. They don't belong to any single intent. Intents and entities can be semantically associated but it is not an exclusive relationship. This allows you to have a detail/entity be applicable across various intents. 
-
-In the LUIS app you're building today, we'll be defining a *Pokemon* entity that can identify a Pokemon by name. Because each of our intents typically involves a particular Pokemon, the *Pokemon* entity will be shared across intents. This means that an intent/entity combination gives us a unique action to perform. 
-
-For example, the "Jigglypuff, sing." utterance yields the intent of *Sing* with an identified *Pokemon* entity of type *Jigglypuff*. 
-
-#### Types of entities
-
-LUIS has a variety of entity types, and each has a specific use. There are too many to dive into here, but I encourage you to learn more by reading the [LUIS documentation]()https://docs.microsoft.com/en-us/azure/cognitive-services/luis/luis-concept-entity-types#types-of-entities.
-
-Now that you know about entities, let's add the *Pokemon* entity.
+Now that the Event Hub has our messages, it's time to create an Azure Function to listen for the message and build the course, department, and student performance demographic data.
 
 <h4 class="exercise-start">
-    <b>Exercise</b>: Creating LUIS intents
+    <b>Exercise</b>: Create an Azure Function
 </h4>
 
-Log in to the LUIS portal at [https://www.luis.ai](https://www.luis.ai), and navigate to the *Entities* area by first navigating to the *My Apps* areas, drilling down into the *Pokemon* app:
+Add an Azure Function project named *ContosoUniversityFunction* to the Visual Studio solution:
 
-<img src="images/chapter7/ent1.png" class="img-override" />
+<img src="images/chapter7/add-func.png" class="img-override" />
 
-This page lists the entities you have defined.
+When specifying the details for the Azure Function project, select *Azure Functions v2 (.NET Core)*, choose the *Event Hub trigger*, *Storage Emulator* for the storage account, *EventHubConnectionString* for the connection string setting, and *dataupdated* as the Event Hub name:
 
-Click the *Create new entity* button to create the *Pokemon* entity. Select *List* as the entity type:
+<img src="images/chapter7/eh-create-2.png" />
 
-<img src="images/chapter7/ent2.png" class="img-override" />
+Click *Ok*.
 
-> **List Entities**
->
-> A list entity is a fixed list of values. Each value is itself a list of synonyms or other forms the value may take. For example, a list entity named PacificStates include the values Washington, Oregon, California. The Washington value then includes both "Washington" and the abbreviation "WA".
+This will add the Azure Function app project to the solution. Unfortunately, it add the Function project as a .NET Core 2.1 project. 
 
-After clicking the *Done* button, you're redirected to the *Pokemon* entity detail page. Add the following values:
-- Pikachu
-- Jigglypuff
-- Meowth
+Immediately right-click the project, select *Properties*, and set the *Target Framework* to .NET Core 2.2:
 
-After adding these Pokemon, add synonyms for each, as shown below.
+<img src="images/chapter7/prop.png" class="img-override" />
 
-<img src="images/chapter7/ent3.png" class="img-override" />
+Remove the *Function1.cs* file.
 
-By adding these synonyms, you train LUIS to recognize the synonyms as the entity list value. For example, *bubble pokemon* will be recognized as a *Pokemon* entity, with *Jigglypuff* as the specific type.
+Next, add project references to the following projects:
+- ContosoUniversityData (for Entity Framework class references)
+- ContosoUniversityInfra (for Event Hub message class references)
 
-#### Validating entity mapping
+Add the follow NuGet Packages:
+- Microsoft.Azure.DocumentDB.Core, v2.3.0
 
-When you've finished adding the entities and synonyms, refresh your browser.
+Open the *local.settings.json* file and add a key under the *Values* area for *EventHubConnectionString*. Set the value to the Event Hub conenction string you saved earlier in this chapter. Your file should look like this:
 
-To validate that the entities are being properly recognized, navigate back to the *Intents* page, then open the detail page for an intent.
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet",
+    "EventHubConnectionString": "{your event hub connection string here}"
+  }
+}
+```
 
-You'll notice that text in each utterance is now replaced with a generic intent *Pokemon* block. You can use the *Entities view* toggle switch to see how utterance text maps to an entity:
+Next, create a class named *UpdateDataFunction* and replace it's contents with the following code:
 
-<img src="images/chapter7/entity.gif" class="img-override" />
+```c#
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Microsoft.Azure.EventHubs;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using ContosoUniversityInfra;
+using ContosoUniversityData.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Azure.Documents.Client;
+using ContosoUniversityInfra.Models;
+using Microsoft.Azure.Documents.Linq;
+
+namespace ContosoUniversityFunction
+{
+    public static class UpdateDataFunction
+    {
+
+        [FunctionName("UpdateData")]
+        public static async Task Run([EventHubTrigger("dataupdated", Connection = "EventHubConnectionString")] EventData[] events, ILogger log)
+        {
+            var exceptions = new List<Exception>();
+
+            foreach (EventData eventData in events)
+            {
+                try
+                {
+                    string messageBody = Encoding.UTF8.GetString(eventData.Body.Array, eventData.Body.Offset, eventData.Body.Count);
+                    var message = JsonConvert.DeserializeObject<DataUpdatedMessage>(messageBody);
+
+                    if (message.MessageType == MessageType.Rebuild)
+                    {
+                        log.LogInformation($"C# Event Hub trigger function processed a message: {messageBody}");
+                    }
+
+                    await Task.Yield();
+                }
+                catch (Exception e)
+                {
+                    // We need to keep processing the rest of the batch - capture this exception and continue.
+                    // Also, consider capturing details of the message that failed processing so it can be processed again later.
+                    exceptions.Add(e);
+                }
+            }
+
+            // Once processing of the batch is complete, if any messages in the batch failed processing throw an exception so that there is a record of the failure.
+            if (exceptions.Count > 1)
+                throw new AggregateException(exceptions);
+
+            if (exceptions.Count == 1)
+                throw exceptions.Single();
+        }
+    }
+}
+```
+
+This code is a standard Azure Function definition that is bound to the Event Hub, and runs each time a message is sent to the hub.
+
+#### Starting Storage Emulator
+
+Before we test our code, you'll have to start the Azure Storage Emulator locally. Storage Emulator is a locally-running application that creates a storage account for use by the Azure Function. 
+
+In the start menu of your workshop VM, type *Storage Emulator* and it will appear in the list of available apps. CLick it to run. Wait approx. 1 minute while it runs for the first time:
+
+<img src="images/chapter7/storage.png" class="img-override" />
+
+That's it! You should see a message saying it started successfully.
+
+#### Testing your Function
+
+Now that you've written you Function, run it in Visual Studio. Change the startup project to the Function project and debug!
+
+<img src="images/chapter7/func.gif" class="img-override" />
+
+Near the end of the file, you'll see a message indicating that a message was received from the Event Hub and processed. This means everything is wired up correctly.
 
 This concludes the exercise. 
 
 <div class="exercise-end"></div>
 
-### Increasing Accuracy with Phrase Lists
+Before we continue, let's take a short break and learn a little about Cosmos Db.
 
-Now that you've added intents and entities, let's explore a quick way to improve the accuracy of your LUIS app with phrase lists.
+### About Cosmos Db
 
-#### What is a phrase list?
+Today’s applications are required to be highly responsive and always online. To achieve low latency and high availability, instances of these applications need to be deployed in datacenters that are close to their users. Applications need to respond in real time to large changes in usage at peak hours, store ever increasing volumes of data, and make this data available to users in milliseconds.
 
-A phrase list includes a group of values (words or phrases) that belong to the same class and must be treated similarly (for example, names of cities or products). What LUIS learns about one of them is automatically applied to the others as well. This is not a white list of matched words.
+Azure Cosmos DB is Microsoft's globally distributed, multi-model database service. With a click of a button, Cosmos DB enables you to elastically and independently scale throughput and storage across any number of Azure regions worldwide. You can elastically scale throughput and storage, and take advantage of fast, single-digit-millisecond data access using your favorite API including SQL, MongoDB, Cassandra, Tables, or Gremlin. Cosmos DB provides comprehensive service level agreements (SLAs) for throughput, latency, availability, and consistency guarantees, something no other database service offers.
 
-In other words, a phrase list can help you better identify an intent or entity in a more dynamic manner.
+#### Key Benefits
 
-#### How to use phrase lists
+**Turnkey global distribution**
 
-For example, in a travel agent app, you can create a phrase list named "Cities" that contains the values London, Paris, and Cairo. If you label one of these values as an entity, LUIS learns to recognize the others.
+Cosmos DB enables you to build highly responsive and highly available applications worldwide. Cosmos DB transparently replicates your data wherever your users are, so your users can interact with a replica of the data that is closest to them.
 
-A phrase list may be interchangeable or non-interchangeable. An interchangeable phrase list is for values that are synonyms, and a non-interchangeable phrase list is intended for values that aren't synonyms but are similar in another way.
+Cosmos DB allows you to add or remove any of the Azure regions to your Cosmos account at any time, with a click of a button. Cosmos DB will seamlessly replicate your data to all the regions associated with your Cosmos account while your application continues to be highly available, thanks to the multi-homing capabilities of the service. For more information, see the global distribution article.
 
-There are two rules of thumb to keep in mind when using phrase lists:
+**Always On**
 
-1. Use phrase lists for terms that LUIS has difficulty recognizing. Phrase lists are a good way to tune the performance of your LUIS app. If your app has trouble classifying some utterances as the correct intent, or recognizing some entities, think about whether the utterances contain unusual words, or words that might be ambiguous in meaning. These words are good candidates to include in a phrase list feature.
+By virtue of deep integration with Azure infrastructure and transparent multi-master replication, Cosmos DB provides 99.999% high availability for both reads and writes. Cosmos DB also provides you with the ability to programmatically (or via Portal) invoke the regional failover of your Cosmos account. This capability helps ensure that your application is designed to failover in the case of regional disaster.
 
-2. Use phrase lists for rare, proprietary, and foreign words.
-LUIS may be unable to recognize rare and proprietary words, as well as foreign words (outside of the culture of the app), and therefore they should be added to a phrase list feature. This phrase list should be marked non-interchangeable, to indicate that the set of rare words form a class that LUIS should learn to recognize, but they are not synonyms or interchangeable with each other.
+**Elastic scalability of throughput and storage, worldwide**
 
-> **A note on using phrase lists**
->
-> A phrase list feature is not an instruction to LUIS to perform strict matching or always label all terms in the phrase list exactly the same. It is simply a hint. For example, you could have a phrase list that indicates that "Patti" and "Selma" are names, but LUIS can still use contextual information to recognize that they mean something different in "make a reservation for 2 at patti's diner for dinner" and "give me driving directions to selma, georgia".
+Designed with transparent horizontal partitioning and multi-master replication, Cosmos DB offers unprecedented elastic scalability for your writes and reads, all around the globe. You can elastically scale up from thousands to hundreds of millions of requests/sec around the globe, with a single API call and pay only for the throughput (and storage) you need. This capability helps you to deal with unexpected spikes in your workloads without having to over-provision for the peak. For more information, see partitioning in Cosmos DB, provisioned throughput on containers and databases, and scaling provisioned throughput globally.
 
-#### When to use phrase lists instead of list entities
+**Guaranteed low latency at 99th percentile, worldwide**
 
-After learning about phrase lists, you may be confused on whether to use these, or to use a list entity.
+Using Cosmos DB, you can build highly responsive, planet scale applications. With its novel multi-master replication protocol and latch-free and write-optimized database engine, Cosmos DB guarantees less than 10-ms latencies for both, reads and (indexed) writes at the 99th percentile, all around the world. This capability enables sustained ingestion of data and blazing-fast queries for highly responsive apps.
 
-With a phrase list, LUIS can still take context into account and generalize to identify items that are similar to, but not an exact match, as items in a list. If you need your LUIS app to be able to generalize and identify new items in a category, it's better to use a phrase list. When you want to be able to recognize new instances of an entity, like a meeting scheduler that should recognize the names of new contacts, or an inventory app that should recognize new products, use another type of machine learned entity such as a simple or hierarchical entity. Then create a phrase list of words and phrases. This list guides LUIS to recognize examples of the entity by adding additional significance to the value of those words.
+**Precisely defined, multiple consistency choices**
 
-A list entity explicitly defines every value an entity can take, and only identifies values that match exactly. A list entity may be appropriate for an app in which all instances of an entity are known and don't change often, like the food items on a restaurant menu that changes infrequently.
+When building globally distributed applications in Cosmos DB, you no longer have to make extreme tradeoffs between consistency, availability, latency, and throughput. Cosmos DB’s multi-master replication protocol is carefully designed to offer five well-defined consistency choices - strong, bounded staleness, session, consistent prefix, and eventual — for an intuitive programming model with low latency and high availability for your globally distributed application.
 
-> **LUIS Best practice**
->
-> After the model's first iteration, add a phrase list feature that has domain-specific words and phrases. This feature helps LUIS adapt to the domain-specific vocabulary, and learn it fast.
+**No schema or index management**
+
+Keeping database schema and indexes in-sync with an application’s schema is especially painful for globally distributed apps. With Cosmos DB, you do not need to deal with schema or index management. The database engine is fully schema-agnostic. Since no schema and index management is required, you also don’t have to worry about application downtime while migrating schemas. Cosmos DB automatically indexes all data and serves queries fast.
+
+**Battle tested database service**
+
+Cosmos DB is a foundational service in Azure. For nearly a decade, Cosmos DB has been used by many of Microsoft’s products for mission critical applications at global scale, including Skype, Xbox, Office 365, Azure, and many others. Today, Cosmos DB is one of the fastest growing services on Azure, used by many external customers and mission-critical applications that require elastic scale, turnkey global distribution, multi-master replication for low latency and high availability of both reads and writes.
+
+**Ubiquitous regional presence**
+
+Cosmos DB is available in all Azure regions worldwide, including 54+ regions in public cloud, Azure China 21Vianet, Azure Germany, Azure Government, and Azure Government for Department of Defense (DoD). See Cosmos DB’s regional presence.
+
+**Secure by default and enterprise ready**
+
+Cosmos DB is certified for a wide array of compliance standards. Additionally, all data in Cosmos DB is encrypted at rest and in motion. Cosmos DB provides row level authorization and adheres to strict security standards.
+
+**Significant TCO savings**
+
+Since Cosmos DB is a fully managed service, you no longer need to manage and operate complex multi datacenter deployments and upgrades of your database software, pay for the support, licensing, or operations or have to provision your database for the peak workload. For more information, see Optimize cost with Cosmos DB.
+
+**Industry leading comprehensive SLAs**
+
+Cosmos DB is the first and only service to offer industry-leading comprehensive SLAs encompassing 99.999% high availability, read and write latency at the 99th percentile, guaranteed throughput, and consistency.
+
+**Globally distributed operational analytics with Spark**
+
+You can run Spark directly on data stored in Cosmos DB. This capability allows you to do low-latency, operational analytics at global scale without impacting transactional workloads operating directly against Cosmos DB. For more information, see Globally distributed operational analytics.
+
+**Develop applications on Cosmos DB using popular NoSQL APIs**
+
+Cosmos DB offers a choice of APIs to work with your data stored in your Cosmos database. By default, you can use SQL (a core API) for querying your Cosmos database. Cosmos DB also implements APIs for Cassandra, MongoDB, Gremlin and Azure Table Storage. You can point client drivers (and tools) for the commonly used NoSQL (e.g., MongoDB, Cassandra, Gremlin) directly to your Cosmos database. By supporting the wire protocols of commonly used NoSQL APIs, Cosmos DB allows you to:
+
+- Easily migrate your application to Cosmos DB while preserving significant portions of your application logic.
+- Keep your application portable and continue to remain cloud vendor-agnostic.
+- Get a fully-managed cloud service with industry leading, financially backed SLAs for the common NoSQL APIs.
+- Elastically scale the provisioned throughput and storage for your databases based on your need and pay only for the throughput and storage you need. This leads to significant cost savings.
+
+
+### Aggregating Data in an Azure Function
+
+Now that we know a little bit aobut Cosmos Db and also know the Azure Function can process Event Hub messages, let's build out the data aggregation pipeline. First, we'll create a Cosmos Db collection to hold our demographics data.
 
 <h4 class="exercise-start">
-    <b>Exercise</b>: Creating phrase lists to increase accuracy
+    <b>Exercise</b>: Create a Cosmos Db collection.
 </h4>
 
-Log in to the LUIS portal at [https://www.luis.ai](https://www.luis.ai), and navigate to the *My Apps* areas, drilling down into the *Pokemon* app.
+Navigate to the Cosmos Db you created earlier in the workshop. On the *Overview* tab, click *+ Add Collection*:
 
-Click on the *Phrase lists* navigation option:
+<img src="images/chapter7/add-collection.png" />
 
-<img src="images/chapter7/phrase1.png" class="img-override" />
+This will prompt you to create a new Database Container. Enter the following values:
 
-Click the *Create new phrase list* button to create a phrase list.
+<img src="images/chapter7/cosmos-db.png" />
 
-You'll be using the phrase list feature to create a phrase list for each of our intents. This is a good idea because our intents like *Sit* and *Jump* are fairly generic, and you can describe each of these intents in a variety of ways. For example, "sit down" and "grab a chair" are different utterances that have the same intent: *Sit*.
+Next, navigate to the *Keys* area of the Cosmos Db and copy the follwoing values:
+- URI
+- PRIMARY KEY
 
-Add a phrase list named *Sit*, and either type in a variety of synonyms for sit, or use the *Recommend* option to help identify a list of words that are related to sitting:
+<img src="images/chapter7/cosmos-keys.png" />
 
-<img src="images/chapter7/phrase.gif" class="img-override" />
-
-I added the following options to my phrase lists, feel free to create your own, add more, subtract some, but be sure to create a phrase list for each intent:
-
-- Sit: sit, lie, rest, be seated, sits, sitting, stay, relax, take a seat, to stay 
-- Wave: wave, signal, waves, sign, gesticulate 
-- Sing: sing, singing, sings, chant, sang 
-- Jump: jump, skip, hop, jumping, jumps, bounce, leap, jumped 
-- Wink: wink, smile, grin, twinkle, winks 
-- Scratch: scratch, scrape, rub, scratching, graze, scratches, scratched
-- ActAngry: angry, annoyed, enraged, frustrated, angered, irate, angers, sad, irritated, fuming 
-
-When you're finished, your phrase lists should look like this:
-
-<img src="images/chapter7/phrase2.png" class="img-override" />
+Save them for later.
 
 This concludes the exercise. 
 
 <div class="exercise-end"></div>
 
-That's it - you've created intents and entities to help train your LUIS app to recognize Pokemon and an action you want the Pokemon to perform. You've also added phrase lists to help train your app to respond and identify intents more efficiently.
 
-In the next chapter, you'll train, test, and publish your LUIS app.
+In this next exercise, we'll be updating the Azure function to write to Cosmos Db.
 
 
+<h4 class="exercise-start">
+    <b>Exercise</b>: Writing to Cosmos Db
+</h4>
+
+Return to Visual Studio and replace the *UpdateDataFunction* class with the following code:
+
+```c#
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Microsoft.Azure.EventHubs;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using ContosoUniversityInfra;
+using ContosoUniversityData.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Azure.Documents.Client;
+using ContosoUniversityInfra.Models;
+using Microsoft.Azure.Documents.Linq;
+
+namespace ContosoUniversityFunction
+{
+    public static class UpdateDataFunction
+    {
+
+        [FunctionName("UpdateData")]
+        public static async Task Run([EventHubTrigger("dataupdated", Connection = "EventHubConnectionString")] EventData[] events, ILogger log)
+        {
+            var exceptions = new List<Exception>();
+            var options = new DbContextOptionsBuilder<SchoolContext>();
+            options.UseSqlServer(Environment.GetEnvironmentVariable("ConnectionString"));
+            var context = new SchoolContext(options.Options);
+
+            foreach (EventData eventData in events)
+            {
+                try
+                {
+                    string messageBody = Encoding.UTF8.GetString(eventData.Body.Array, eventData.Body.Offset, eventData.Body.Count);
+                    var message = JsonConvert.DeserializeObject<DataUpdatedMessage>(messageBody);
+
+                    if (message.MessageType == MessageType.Rebuild)
+                    {
+                        log.LogInformation($"C# Event Hub trigger function processed a message: {messageBody}");
+
+                        // recalc CosmosDb for students
+
+                        // get demographics from cosmos db
+                        var client = new DocumentClient(new Uri(Environment.GetEnvironmentVariable("CosmosDbUri")), Environment.GetEnvironmentVariable("CosmosDbAuthKey"));
+
+                        var queryOptions = new FeedOptions { MaxItemCount = -1 };
+                        var query = client.CreateDocumentQuery<DemographicsDto>(
+                                UriFactory.CreateDocumentCollectionUri("demographics", "demographics"), queryOptions)
+                                .Where(d => d.SchoolYear == 2019)
+                                .AsDocumentQuery();
+
+                        var results = new List<DemographicsDto>();
+                        while (query.HasMoreResults)
+                            results.AddRange(await query.ExecuteNextAsync<DemographicsDto>());
+
+                        DemographicsDto demographicsDto =
+                            results.Count == 0 ? 
+                                new DemographicsDto(2019) : 
+                                results[0];
+
+                        // clean out existing courses b/c we're going to rebuild it
+                        demographicsDto.Courses.Clear();
+
+                        var courses = await context.Courses
+                            .Include(i => i.Department)
+                            .Include(i => i.Enrollments)
+                            .ToListAsync();
+                        foreach (var course in courses)
+                        {
+                            demographicsDto.Courses.Add(new CourseAggregateDto()
+                            {
+                                CourseId = course.CourseID,
+                                CourseName = course.Title,
+                                DepartmentId = course.DepartmentID,
+                                DepartmentName = course.Department.Name,
+                                EnrollmentCount = course.Enrollments.Count,
+                                GradeACount = course.Enrollments.Count(e => e.Grade == ContosoUniversityData.Models.Grade.A),
+                                GradeBCount = course.Enrollments.Count(e => e.Grade == ContosoUniversityData.Models.Grade.B),
+                                GradeCCount = course.Enrollments.Count(e => e.Grade == ContosoUniversityData.Models.Grade.C),
+                                GradeDCount = course.Enrollments.Count(e => e.Grade == ContosoUniversityData.Models.Grade.D),
+                                GradeFCount = course.Enrollments.Count(e => e.Grade == ContosoUniversityData.Models.Grade.F),
+                                GradeOtherCount = course.Enrollments.Count(e => !e.Grade.HasValue)
+                            });
+                        }
+
+                        // check if document exists, upsert or replace
+                        if (demographicsDto.Id == null)
+                            await client.UpsertDocumentAsync(UriFactory.CreateDocumentCollectionUri("demographics", "demographics"), demographicsDto);
+                        else
+                            await client.ReplaceDocumentAsync(UriFactory.CreateDocumentUri("demographics", "demographics", demographicsDto.Id), demographicsDto);
+                    }
+
+                    await Task.Yield();
+                }
+                catch (Exception e)
+                {
+                    // We need to keep processing the rest of the batch - capture this exception and continue.
+                    // Also, consider capturing details of the message that failed processing so it can be processed again later.
+                    exceptions.Add(e);
+                }
+            }
+
+            // Once processing of the batch is complete, if any messages in the batch failed processing throw an exception so that there is a record of the failure.
+            if (exceptions.Count > 1)
+                throw new AggregateException(exceptions);
+
+            if (exceptions.Count == 1)
+                throw exceptions.Single();
+        }
+    }
+}
+```
+
+This updated code queries Cosmos Db for the demographic data. It then uses Entity Framework to query enrolment and student performance stats for each course. Finally, it either creates a new entry in Cosmos or updates the existing entry.
+
+Due to time constraints, we won't spend time explaining the details any further; however, you're encouraged to continue exploring on your own.
+
+#### Update the local.settings.json file
+
+Next, add several configuration settings to the *local.settings.json* file in the *Values* section:
+
+```json
+"ConnectionString": "{your Azure SQL Server connection string}",
+"CosmosDbUri": "{your Cosmos Db URI}",
+"CosmosDbAuthKey": "{your Cosmos Db PRIMARY KEY}"
+```
+
+#### Testing your code
+
+Run the Azure function, then navigate to the Azure-hosted Contoso University web app and add a Student.
+
+You should see the Function app console window respond almost immediately, indicating it aggregated the data and wrote it to Cosmos Db.
+
+Stop the Function app. Navigate to the Cosmos Db service in the Azure portal. Locate the *Data Explorer* area and find the list of documents stored int he demographics container. You shoudl see the document just created by the Azure function:
+
+<img src="images/chapter7/documentdb.png" class="img-override" />
+
+This concludes the exercise. 
+
+#### Deploying the Function App
+
+Right-click the Function app and select *Publish*. When prompted, *Select an Existing* Function app and locate the app you created earlier in this chapter.
+
+This will compile your Function and deploy it to Azure.
+
+After you've deployed to Azure, navigate to the Function app configuration area:
+
+<img src="images/chapter7/config.png" class="img-override" />
+
+Add several app settings into the Configuration area:
+- EventHubConnectionString
+- ConnectionString
+- CosmosDbUri
+- CosmosDbAuthKey
+
+NOTE: These are the same values you had locally stored in the *local.settings.json* file.
+
+Save the settings. Return to the main Function page and restart the Function app.
+
+<div class="exercise-end"></div>
+
+### The Super Challenge
+
+At the beginning of this chapter, we outlined a multi-step process to creating an external REST API. Together, we've completed 75% of that work. We have created the first 3 of these items:
+1. Event Hub that receives a message when data is updated in the internal ContosoUniversity3 database
+2. An Azure Function that listens for Event Hub messages and rebuilds/aggregates the course, department, and student performance data.
+3. A Cosmos DB instance that will house the aggregate data in an efficient JSON data structure.
+4. A Web API project with REST API endpoint to retrieve the aggregate demographic data.
+5. An API Management API that exposes the new REST API service for other universities to access.
+
+With what you've learned in this workshop, I feel confident you should be able to complete #4 and #5 on your own. The workshop isn't over, and I'll be around to help out when needed.
+
+Good luck!
